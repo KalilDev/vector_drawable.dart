@@ -1,6 +1,7 @@
 import 'dart:collection';
 
 import 'package:flutter/material.dart';
+import 'package:vector_drawable/src/parsing/style.dart';
 import 'package:xml/xml.dart';
 import 'package:path_parsing/path_parsing.dart';
 import 'package:path_parsing/src/path_segment_type.dart';
@@ -27,12 +28,16 @@ Vector _parseVector(XmlElement node) {
     height: _parseDimension(node.getAndroidAttribute('height')!),
     viewportWidth: double.parse(node.getAndroidAttribute('viewportWidth')!),
     viewportHeight: double.parse(node.getAndroidAttribute('viewportHeight')!),
-    tint: node.getAndroidAttribute('tint')?.map(parseHexColor),
+    tint: node.getStyleOrAndroidAttribute('tint', parse: parseHexColor),
     tintMode: node.getAndroidAttribute('tintMode')?.map(_parseTintMode) ??
         BlendMode.srcIn,
     autoMirrored:
         node.getAndroidAttribute('autoMirrored')?.map(parseBool) ?? false,
-    opacity: node.getAndroidAttribute('opacity')?.map(double.parse) ?? 1.0,
+    opacity: node.getStyleOrAndroidAttribute(
+      'opacity',
+      parse: double.parse,
+      defaultValue: 1.0,
+    )!,
     children: node.childElements
         .map(_parseVectorPart)
         .whereType<VectorPart>()
@@ -47,13 +52,15 @@ Group? _parseGroup(XmlElement node) {
 
   return Group(
     name: node.getAndroidAttribute('name'),
-    rotation: node.getAndroidAttribute('rotation')?.map(double.parse),
-    pivotX: node.getAndroidAttribute('pivotX')?.map(double.parse),
-    pivotY: node.getAndroidAttribute('pivotY')?.map(double.parse),
-    scaleX: node.getAndroidAttribute('scaleX')?.map(double.parse),
-    scaleY: node.getAndroidAttribute('scaleY')?.map(double.parse),
-    translateX: node.getAndroidAttribute('translateX')?.map(double.parse),
-    translateY: node.getAndroidAttribute('translateY')?.map(double.parse),
+    rotation: node.getStyleOrAndroidAttribute('rotation', parse: double.parse),
+    pivotX: node.getStyleOrAndroidAttribute('pivotX', parse: double.parse),
+    pivotY: node.getStyleOrAndroidAttribute('pivotY', parse: double.parse),
+    scaleX: node.getStyleOrAndroidAttribute('scaleX', parse: double.parse),
+    scaleY: node.getStyleOrAndroidAttribute('scaleY', parse: double.parse),
+    translateX:
+        node.getStyleOrAndroidAttribute('translateX', parse: double.parse),
+    translateY:
+        node.getStyleOrAndroidAttribute('translateY', parse: double.parse),
     children: node.childElements
         .map(_parseVectorPart)
         .whereType<VectorPart>()
@@ -73,22 +80,42 @@ Path? _parsePath(XmlElement node) {
   }
   return Path(
     name: node.getAndroidAttribute('name'),
-    pathData: node.getAndroidAttribute('pathData')!.map(PathData.fromString),
+    pathData: node.getStyleOrAndroidAttribute('pathData',
+        parse: PathData.fromString)!,
     fillColor:
-        node.getAndroidAttribute('fillColor')?.map(ColorOrStyleColor.parse),
+        node.getStyleOrAndroidAttribute('fillColor', parse: parseHexColor),
     strokeColor:
-        node.getAndroidAttribute('strokeColor')?.map(ColorOrStyleColor.parse),
-    strokeWidth:
-        node.getAndroidAttribute('strokeWidth')?.map(double.parse) ?? 0,
-    strokeAlpha:
-        node.getAndroidAttribute('strokeAlpha')?.map(double.parse) ?? 1,
-    fillAlpha: node.getAndroidAttribute('fillAlpha')?.map(double.parse) ?? 1,
-    trimPathStart:
-        node.getAndroidAttribute('trimPathStart')?.map(double.parse) ?? 0,
-    trimPathEnd:
-        node.getAndroidAttribute('trimPathEnd')?.map(double.parse) ?? 1,
-    trimPathOffset:
-        node.getAndroidAttribute('trimPathOffset')?.map(double.parse) ?? 0,
+        node.getStyleOrAndroidAttribute('strokeColor', parse: parseHexColor),
+    strokeWidth: node.getStyleOrAndroidAttribute(
+      'strokeWidth',
+      parse: double.parse,
+      defaultValue: 0,
+    )!,
+    strokeAlpha: node.getStyleOrAndroidAttribute(
+      'strokeAlpha',
+      parse: double.parse,
+      defaultValue: 1,
+    )!,
+    fillAlpha: node.getStyleOrAndroidAttribute(
+      'fillAlpha',
+      parse: double.parse,
+      defaultValue: 1,
+    )!,
+    trimPathStart: node.getStyleOrAndroidAttribute(
+      'trimPathStart',
+      parse: double.parse,
+      defaultValue: 0,
+    )!,
+    trimPathEnd: node.getStyleOrAndroidAttribute(
+      'trimPathEnd',
+      parse: double.parse,
+      defaultValue: 1,
+    )!,
+    trimPathOffset: node.getStyleOrAndroidAttribute(
+      'trimPathOffset',
+      parse: double.parse,
+      defaultValue: 0,
+    )!,
     strokeLineCap:
         node.getAndroidAttribute('strokeLineCap')?.map(_parseStrokeLineCap) ??
             StrokeLineCap.butt,

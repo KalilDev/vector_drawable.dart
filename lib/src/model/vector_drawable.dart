@@ -2,6 +2,7 @@ import 'dart:collection';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:vector_drawable/src/model/style.dart';
 import 'package:xml/xml.dart';
 import 'package:path_parsing/path_parsing.dart';
 import 'package:path_parsing/src/path_segment_type.dart';
@@ -37,6 +38,10 @@ abstract class VectorDrawableNode implements Diagnosticable {
   VectorDrawableNode({
     this.name,
   });
+  Iterable<StyleProperty> get _usedStyles;
+  Iterable<StyleProperty> get _localUsedStyles;
+  late final Set<StyleProperty> localUsedStyles = _localUsedStyles.toSet();
+  late final Set<StyleProperty> usedStyles = _usedStyles.toSet();
 }
 
 abstract class VectorPart extends VectorDrawableNode {
@@ -48,10 +53,10 @@ class Vector extends VectorDrawableNode with DiagnosticableTreeMixin {
   final Dimension height;
   final double viewportWidth;
   final double viewportHeight;
-  final Color? tint;
+  final StyleOr<Color>? tint;
   final BlendMode tintMode;
   final bool autoMirrored;
-  final double opacity;
+  final StyleOr<double> opacity;
   final List<VectorPart> children;
 
   Vector({
@@ -63,7 +68,7 @@ class Vector extends VectorDrawableNode with DiagnosticableTreeMixin {
     required this.tint,
     this.tintMode = BlendMode.srcIn,
     this.autoMirrored = false,
-    this.opacity = 1.0,
+    this.opacity = const StyleOr.value(1.0),
     required this.children,
   }) : super(name: name);
 
@@ -78,28 +83,23 @@ class Vector extends VectorDrawableNode with DiagnosticableTreeMixin {
     properties.add(DiagnosticsProperty('height', height));
     properties.add(DoubleProperty('viewportWidth', viewportWidth));
     properties.add(DoubleProperty('viewportHeight', viewportHeight));
-    properties.add(ColorProperty('tint', tint));
+    properties.add(DiagnosticsProperty('tint', tint));
     properties
         .add(EnumProperty('tintMode', tintMode, defaultValue: BlendMode.srcIn));
     properties.add(
         FlagProperty('autoMirrored', value: autoMirrored, defaultValue: false));
-    properties.add(DoubleProperty('opacity', opacity, defaultValue: 1.0));
+    properties.add(DiagnosticsProperty('opacity', opacity, defaultValue: 1.0));
   }
 
-  Iterable<StyleColor> _expandColorsFromVectorPart(VectorPart part) =>
-      part is Group
-          ? part.children.expand(_expandColorsFromVectorPart)
-          : part is Path
-              ? [
-                  if (part.strokeColor?.styleColor != null)
-                    part.strokeColor!.styleColor!,
-                  if (part.fillColor?.styleColor != null)
-                    part.fillColor!.styleColor!,
-                ]
-              : [];
+  @override
+  Iterable<StyleProperty> get _usedStyles =>
+      children.expand((e) => e._usedStyles).followedBy(_localUsedStyles);
 
-  late final Set<StyleColor> usedColors =
-      (children.expand(_expandColorsFromVectorPart)).toSet();
+  @override
+  Iterable<StyleProperty> get _localUsedStyles => [
+        if (tint?.styled != null) tint!.styled!,
+        if (opacity.styled != null) opacity.styled!,
+      ];
 }
 
 class PathData {
@@ -110,12 +110,18 @@ class PathData {
   List<PathSegmentData>? _segments;
   static List<PathSegmentData> _parse(String asString) {
     final SvgPathStringSource parser = SvgPathStringSource(asString);
+    // Parse each segment individually, appending an close segment in case an
+    // error occurs.
+    final result = <PathSegmentData>[];
     try {
-      return parser.parseSegments().toList();
+      while (parser.hasMoreData) {
+        result.add(parser.parseSegment());
+      }
     } catch (e) {
       print(e);
-      return [];
+      result.add(PathSegmentData()..command = SvgPathSegType.close);
     }
+    return result;
   }
 
   static String _toString(List<PathSegmentData> segments) {
@@ -131,13 +137,13 @@ class PathData {
 }
 
 class Group extends VectorPart with DiagnosticableTreeMixin {
-  final double? rotation;
-  final double? pivotX;
-  final double? pivotY;
-  final double? scaleX;
-  final double? scaleY;
-  final double? translateX;
-  final double? translateY;
+  final StyleOr<double>? rotation;
+  final StyleOr<double>? pivotX;
+  final StyleOr<double>? pivotY;
+  final StyleOr<double>? scaleX;
+  final StyleOr<double>? scaleY;
+  final StyleOr<double>? translateX;
+  final StyleOr<double>? translateY;
   final List<VectorPart> children;
 
   Group({
@@ -159,53 +165,28 @@ class Group extends VectorPart with DiagnosticableTreeMixin {
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
-    properties.add(DoubleProperty('rotation', rotation));
-    properties.add(DoubleProperty('pivotX', pivotX));
-    properties.add(DoubleProperty('pivotY', pivotY));
-    properties.add(DoubleProperty('scaleX', scaleX));
-    properties.add(DoubleProperty('scaleY', scaleY));
-    properties.add(DoubleProperty('translateX', translateX));
-    properties.add(DoubleProperty('translateY', translateY));
+    properties.add(DiagnosticsProperty('rotation', rotation));
+    properties.add(DiagnosticsProperty('pivotX', pivotX));
+    properties.add(DiagnosticsProperty('pivotY', pivotY));
+    properties.add(DiagnosticsProperty('scaleX', scaleX));
+    properties.add(DiagnosticsProperty('scaleY', scaleY));
+    properties.add(DiagnosticsProperty('translateX', translateX));
+    properties.add(DiagnosticsProperty('translateY', translateY));
   }
-}
 
-class ColorOrStyleColor {
-  final Color? color;
-  final StyleColor? styleColor;
-
-  ColorOrStyleColor.styleColor(this.styleColor) : color = null;
-  ColorOrStyleColor.color(this.color) : styleColor = null;
-  factory ColorOrStyleColor.parse(String colorOrThemeColor) {
-    if (colorOrThemeColor.startsWith('#')) {
-      return ColorOrStyleColor.color(parseHexColor(colorOrThemeColor));
-    } else if (colorOrThemeColor.startsWith('?')) {
-      return ColorOrStyleColor.styleColor(
-          StyleColor.fromString(colorOrThemeColor));
-    } else {
-      throw UnimplementedError();
-    }
-  }
-}
-
-class StyleColor {
-  final String namespace;
-  final String name;
-
-  const StyleColor(this.namespace, this.name);
-  factory StyleColor.fromString(String themeColor) {
-    if (!themeColor.startsWith('?')) {
-      throw StateError('');
-    }
-    final split = themeColor.split(':');
-    if (split.length != 2 && split.length != 1) {
-      throw StateError('');
-    }
-    return StyleColor(split.length == 1 ? '' : split[0].substring(1),
-        split.length == 1 ? split[0].substring(1) : split[1]);
-  }
-  int get hashCode => Object.hashAll([namespace, name]);
-  bool operator ==(other) =>
-      other is StyleColor && other.namespace == namespace && other.name == name;
+  @override
+  Iterable<StyleProperty> get _usedStyles =>
+      _localUsedStyles.followedBy(children.expand((e) => e._usedStyles));
+  @override
+  Iterable<StyleProperty> get _localUsedStyles => [
+        if (rotation?.styled != null) rotation!.styled!,
+        if (pivotX?.styled != null) pivotX!.styled!,
+        if (pivotY?.styled != null) pivotY!.styled!,
+        if (scaleX?.styled != null) scaleX!.styled!,
+        if (scaleY?.styled != null) scaleY!.styled!,
+        if (translateX?.styled != null) translateX!.styled!,
+        if (translateY?.styled != null) translateY!.styled!,
+      ];
 }
 
 enum FillType { nonZero, evenOdd }
@@ -221,15 +202,15 @@ enum StrokeLineJoin {
 }
 
 class Path extends VectorPart with Diagnosticable {
-  final PathData pathData;
-  final ColorOrStyleColor? fillColor;
-  final ColorOrStyleColor? strokeColor;
-  final double strokeWidth;
-  final double strokeAlpha;
-  final double fillAlpha;
-  final double trimPathStart;
-  final double trimPathEnd;
-  final double trimPathOffset;
+  final StyleOr<PathData> pathData;
+  final StyleOr<Color>? fillColor;
+  final StyleOr<Color>? strokeColor;
+  final StyleOr<double> strokeWidth;
+  final StyleOr<double> strokeAlpha;
+  final StyleOr<double> fillAlpha;
+  final StyleOr<double> trimPathStart;
+  final StyleOr<double> trimPathEnd;
+  final StyleOr<double> trimPathOffset;
   final StrokeLineCap strokeLineCap;
   final StrokeLineJoin strokeLineJoin;
   final double strokeMiterLimit;
@@ -240,12 +221,12 @@ class Path extends VectorPart with Diagnosticable {
     required this.pathData,
     required this.fillColor,
     required this.strokeColor,
-    this.strokeWidth = 0,
-    this.strokeAlpha = 1,
-    this.fillAlpha = 1,
-    this.trimPathStart = 0,
-    this.trimPathEnd = 1,
-    this.trimPathOffset = 0,
+    this.strokeWidth = const StyleOr.value(0),
+    this.strokeAlpha = const StyleOr.value(1),
+    this.fillAlpha = const StyleOr.value(1),
+    this.trimPathStart = const StyleOr.value(0),
+    this.trimPathEnd = const StyleOr.value(1),
+    this.trimPathOffset = const StyleOr.value(0),
     this.strokeLineCap = StrokeLineCap.butt,
     this.strokeLineJoin = StrokeLineJoin.miter,
     this.strokeMiterLimit = 4,
@@ -259,14 +240,18 @@ class Path extends VectorPart with Diagnosticable {
     properties.add(DiagnosticsProperty('pathData', pathData));
     properties.add(DiagnosticsProperty('fillColor', fillColor));
     properties.add(DiagnosticsProperty('strokeColor', strokeColor));
-    properties.add(DoubleProperty('strokeWidth', strokeWidth, defaultValue: 0));
-    properties.add(DoubleProperty('strokeAlpha', strokeAlpha, defaultValue: 1));
-    properties.add(DoubleProperty('fillAlpha', fillAlpha, defaultValue: 1));
     properties
-        .add(DoubleProperty('trimPathStart', trimPathStart, defaultValue: 0));
-    properties.add(DoubleProperty('trimPathEnd', trimPathEnd, defaultValue: 1));
+        .add(DiagnosticsProperty('strokeWidth', strokeWidth, defaultValue: 0));
     properties
-        .add(DoubleProperty('trimPathOffset', trimPathOffset, defaultValue: 0));
+        .add(DiagnosticsProperty('strokeAlpha', strokeAlpha, defaultValue: 1));
+    properties
+        .add(DiagnosticsProperty('fillAlpha', fillAlpha, defaultValue: 1));
+    properties.add(
+        DiagnosticsProperty('trimPathStart', trimPathStart, defaultValue: 0));
+    properties
+        .add(DiagnosticsProperty('trimPathEnd', trimPathEnd, defaultValue: 1));
+    properties.add(
+        DiagnosticsProperty('trimPathOffset', trimPathOffset, defaultValue: 0));
     properties.add(EnumProperty('strokeLineCap', strokeLineCap,
         defaultValue: StrokeLineCap.butt));
     properties.add(EnumProperty('strokeLineJoin', strokeLineJoin,
@@ -276,4 +261,19 @@ class Path extends VectorPart with Diagnosticable {
     properties.add(
         EnumProperty('fillType', fillType, defaultValue: FillType.nonZero));
   }
+
+  @override
+  Iterable<StyleProperty> get _localUsedStyles => _usedStyles;
+  @override
+  Iterable<StyleProperty> get _usedStyles => [
+        if (pathData.styled != null) pathData.styled!,
+        if (fillColor?.styled != null) fillColor!.styled!,
+        if (strokeColor?.styled != null) strokeColor!.styled!,
+        if (strokeWidth.styled != null) strokeWidth.styled!,
+        if (strokeAlpha.styled != null) strokeAlpha.styled!,
+        if (fillAlpha.styled != null) fillAlpha.styled!,
+        if (trimPathStart.styled != null) trimPathStart.styled!,
+        if (trimPathEnd.styled != null) trimPathEnd.styled!,
+        if (trimPathOffset.styled != null) trimPathOffset.styled!,
+      ];
 }
