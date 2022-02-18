@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import '../model/style.dart';
 import '../model/vector_drawable.dart';
 import 'package:vector_math/vector_math_64.dart' show Vector3;
 import 'dart:ui' as ui;
@@ -39,23 +40,27 @@ class VectorWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _RawVectorWidget(
+    return RawVectorWidget(
       vector: vector,
-      styleMapping: styleMapping
-          .mergeWith(ColorSchemeStyleMapping(Theme.of(context).colorScheme)),
+      styleMapping: styleMapping.mergeWith(
+        ColorSchemeStyleMapping(Theme.of(context).colorScheme),
+      ),
+      cachingStrategy: RenderVectorCachingStrategy.groupAndPath,
     );
   }
 }
 
-class _RawVectorWidget extends LeafRenderObjectWidget {
-  const _RawVectorWidget({
+class RawVectorWidget extends LeafRenderObjectWidget {
+  const RawVectorWidget({
     Key? key,
     required this.vector,
     required this.styleMapping,
+    this.cachingStrategy = RenderVectorCachingStrategy.none,
   }) : super(key: key);
 
   final Vector vector;
-  final StyleMapping styleMapping;
+  final StyleResolver styleMapping;
+  final RenderVectorCachingStrategy cachingStrategy;
 
   @override
   RenderObject createRenderObject(BuildContext context) {
@@ -66,6 +71,7 @@ class _RawVectorWidget extends LeafRenderObjectWidget {
       textScaleFactor: mediaQuery.textScaleFactor,
       textDirection: Directionality.of(context),
       styleMapping: styleMapping,
+      cachingStrategy: cachingStrategy,
     );
   }
 
@@ -77,7 +83,8 @@ class _RawVectorWidget extends LeafRenderObjectWidget {
       ..devicePixelRatio = mediaQuery.devicePixelRatio
       ..textScaleFactor = mediaQuery.textScaleFactor
       ..textDirection = Directionality.of(context)
-      ..styleMapping = styleMapping;
+      ..styleMapping = styleMapping
+      ..cachingStrategy = cachingStrategy;
   }
 }
 
@@ -88,13 +95,13 @@ class _MergedStyleMapping extends StyleMapping with Diagnosticable {
   _MergedStyleMapping(this.a, this.b);
 
   @override
-  bool contains(StyleColor color) => a.contains(color) || b.contains(color);
+  bool contains(StyleProperty color) => a.contains(color) || b.contains(color);
   @override
-  bool containsAny(Set<StyleColor> colors) =>
+  bool containsAny(Set<StyleProperty> colors) =>
       a.containsAny(colors) || b.containsAny(colors);
 
   @override
-  Color? styled(StyleColor color) => a.styled(color) ?? b.styled(color);
+  T? resolve<T>(StyleProperty color) => a.resolve(color) ?? b.resolve(color);
 
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
@@ -108,81 +115,88 @@ class ColorSchemeStyleMapping extends StyleMapping with Diagnosticable {
   final ColorScheme scheme;
   ColorSchemeStyleMapping(this.scheme);
   static final _kColorSchemeColors = {
-    const StyleColor('android', 'colorBackground'),
-    const StyleColor('', 'colorSurface'),
-    const StyleColor('', 'colorOnSurface'),
-    const StyleColor('', 'colorInverseSurface'),
-    const StyleColor('', 'colorOnInverseSurface'),
-    const StyleColor('', 'colorInversePrimary'),
-    const StyleColor('', 'colorSurfaceVariant'),
-    const StyleColor('', 'colorOnSurfaceVariant'),
-    const StyleColor('', 'colorOutline'),
-    const StyleColor('', 'colorBackground'),
-    const StyleColor('', 'colorOnBackground'),
-    const StyleColor('', 'colorPrimary'),
-    const StyleColor('', 'colorOnPrimary'),
-    const StyleColor('', 'colorSecondary'),
-    const StyleColor('', 'colorOnSecondary'),
-    const StyleColor('', 'colorTertiary'),
-    const StyleColor('', 'colorOnTertiary'),
-    const StyleColor('', 'colorError'),
-    const StyleColor('', 'colorOnError'),
+    const StyleProperty('android', 'colorBackground'),
+    const StyleProperty('', 'colorSurface'),
+    const StyleProperty('', 'colorOnSurface'),
+    const StyleProperty('', 'colorInverseSurface'),
+    const StyleProperty('', 'colorOnInverseSurface'),
+    const StyleProperty('', 'colorInversePrimary'),
+    const StyleProperty('', 'colorSurfaceVariant'),
+    const StyleProperty('', 'colorOnSurfaceVariant'),
+    const StyleProperty('', 'colorOutline'),
+    const StyleProperty('', 'colorBackground'),
+    const StyleProperty('', 'colorOnBackground'),
+    const StyleProperty('', 'colorPrimary'),
+    const StyleProperty('', 'colorOnPrimary'),
+    const StyleProperty('', 'colorSecondary'),
+    const StyleProperty('', 'colorOnSecondary'),
+    const StyleProperty('', 'colorTertiary'),
+    const StyleProperty('', 'colorOnTertiary'),
+    const StyleProperty('', 'colorError'),
+    const StyleProperty('', 'colorOnError'),
   };
 
   @override
-  bool contains(StyleColor color) => _kColorSchemeColors.contains(color);
+  bool contains(StyleProperty color) => _kColorSchemeColors.contains(color);
   @override
-  bool containsAny(Set<StyleColor> colors) =>
+  bool containsAny(Set<StyleProperty> colors) =>
       colors.any(_kColorSchemeColors.contains);
 
   @override
-  Color? styled(StyleColor color) {
-    if (color == const StyleColor('android', 'colorBackground')) {
-      return scheme.background;
-    }
-    if (color.namespace != '') {
+  T? resolve<T>(StyleProperty color) {
+    if (T != Color) {
       return null;
     }
-    switch (color.name) {
-      case 'colorSurface':
-        return scheme.surface;
-      case 'colorOnSurface':
-        return scheme.onSurface;
-      case 'colorInverseSurface':
-        return scheme.inverseSurface;
-      case 'colorOnInverseSurface':
-        return scheme.onInverseSurface;
-      case 'colorInversePrimary':
-        return scheme.inversePrimary;
-      case 'colorSurfaceVariant':
-        return scheme.surfaceVariant;
-      case 'colorOnSurfaceVariant':
-        return scheme.onSurfaceVariant;
-      case 'colorOutline':
-        return scheme.outline;
-      case 'colorBackground':
+    Color? _resolveColor() {
+      if (color == const StyleProperty('android', 'colorBackground')) {
         return scheme.background;
-      case 'colorOnBackground':
-        return scheme.onBackground;
-      case 'colorPrimary':
-        return scheme.primary;
-      case 'colorOnPrimary':
-        return scheme.onPrimary;
-      case 'colorSecondary':
-        return scheme.secondary;
-      case 'colorOnSecondary':
-        return scheme.onSecondary;
-      case 'colorTertiary':
-        return scheme.tertiary;
-      case 'colorOnTertiary':
-        return scheme.onTertiary;
-      case 'colorError':
-        return scheme.error;
-      case 'colorOnError':
-        return scheme.onError;
-      default:
+      }
+      if (color.namespace != '') {
         return null;
+      }
+      switch (color.name) {
+        case 'colorSurface':
+          return scheme.surface;
+        case 'colorOnSurface':
+          return scheme.onSurface;
+        case 'colorInverseSurface':
+          return scheme.inverseSurface;
+        case 'colorOnInverseSurface':
+          return scheme.onInverseSurface;
+        case 'colorInversePrimary':
+          return scheme.inversePrimary;
+        case 'colorSurfaceVariant':
+          return scheme.surfaceVariant;
+        case 'colorOnSurfaceVariant':
+          return scheme.onSurfaceVariant;
+        case 'colorOutline':
+          return scheme.outline;
+        case 'colorBackground':
+          return scheme.background;
+        case 'colorOnBackground':
+          return scheme.onBackground;
+        case 'colorPrimary':
+          return scheme.primary;
+        case 'colorOnPrimary':
+          return scheme.onPrimary;
+        case 'colorSecondary':
+          return scheme.secondary;
+        case 'colorOnSecondary':
+          return scheme.onSecondary;
+        case 'colorTertiary':
+          return scheme.tertiary;
+        case 'colorOnTertiary':
+          return scheme.onTertiary;
+        case 'colorError':
+          return scheme.error;
+        case 'colorOnError':
+          return scheme.onError;
+        default:
+          return null;
+      }
     }
+
+    return _resolveColor() as T;
   }
 
   @override
@@ -195,13 +209,13 @@ class ColorSchemeStyleMapping extends StyleMapping with Diagnosticable {
 class _EmptyStyleMapping extends StyleMapping with Diagnosticable {
   const _EmptyStyleMapping();
   @override
-  bool contains(StyleColor color) => false;
+  bool contains(StyleProperty color) => false;
 
   @override
-  bool containsAny(Set<StyleColor> colors) => false;
+  bool containsAny(Set<StyleProperty> colors) => false;
 
   @override
-  Color? styled(StyleColor color) => null;
+  T? resolve<T>(StyleProperty color) => null;
 }
 
 class DiagnosticableMapEntry<K, V> with Diagnosticable {
@@ -220,7 +234,7 @@ class DiagnosticableMapEntry<K, V> with Diagnosticable {
 }
 
 class _MapStyleMapping extends StyleMapping with DiagnosticableTreeMixin {
-  final Map<String, Color> map;
+  final Map<String, Object> map;
   final String namespace;
 
   _MapStyleMapping(
@@ -229,24 +243,24 @@ class _MapStyleMapping extends StyleMapping with DiagnosticableTreeMixin {
   });
 
   @override
-  bool contains(StyleColor color) =>
+  bool contains(StyleProperty color) =>
       color.namespace == namespace && map.containsKey(color.name);
 
   @override
-  bool containsAny(Set<StyleColor> colors) => colors.any(contains);
+  bool containsAny(Set<StyleProperty> colors) => colors.any(contains);
 
   @override
-  Color? styled(StyleColor color) {
-    if (!contains(color)) {
+  T? resolve<T>(StyleProperty prop) {
+    if (!contains(prop)) {
       return null;
     }
-    return map[color.name];
+    return map[prop.name] as T?;
   }
 
   @override
   List<DiagnosticsNode> debugDescribeChildren() => map.entries
-      .map(
-          (e) => DiagnosticableMapEntry(e, 'name', 'color').toDiagnosticsNode())
+      .map((e) => DiagnosticableMapEntry(e, 'name', 'styledProperty')
+          .toDiagnosticsNode())
       .toList();
 
   @override
@@ -256,33 +270,172 @@ class _MapStyleMapping extends StyleMapping with DiagnosticableTreeMixin {
   }
 }
 
-abstract class StyleMapping implements Diagnosticable {
+class _GroupValues {
+  final Matrix4? transform;
+
+  factory _GroupValues(
+    double? rotation,
+    double? pivotX,
+    double? pivotY,
+    double? scaleX,
+    double? scaleY,
+    double? translateX,
+    double? translateY,
+  ) {
+    if (_groupHasTransform(rotation, scaleX, scaleY, translateX, translateY)) {
+      return _GroupValues._(
+        _groupTransform(
+          rotation ?? 0,
+          pivotX ?? 0,
+          pivotY ?? 0,
+          scaleX ?? 1,
+          scaleY ?? 1,
+          translateX ?? 0,
+          translateY ?? 0,
+        ),
+      );
+    }
+    return const _GroupValues._(null);
+  }
+
+  const _GroupValues._(this.transform);
+
+  static bool _groupHasTransform(
+    double? rotation,
+    double? scaleX,
+    double? scaleY,
+    double? translateX,
+    double? translateY,
+  ) =>
+      (rotation != null && rotation != 0) ||
+      (scaleX != null && scaleX != 1) ||
+      (scaleY != null && scaleY != 1) ||
+      (translateX != null && translateX != 0) ||
+      (translateY != null && translateY != 0);
+
+  static double _degToRad(double deg) => (deg / 360) * 2 * pi;
+
+  // https://api.skia.org/classSkMatrix.html#a4fb81568e425b3a6fb5984dac12abb8e
+  static Matrix4 _postScale(double x, double y, Matrix4 matrix) {
+    final t = Matrix4.diagonal3(Vector3(x, y, 1));
+    return t.multiplied(matrix);
+  }
+
+  // https://api.skia.org/classSkMatrix.html#a83c8625b53e9a511076b19b92e0f98d0
+  static Matrix4 _postTranslate(double x, double y, Matrix4 matrix) {
+    final t = Matrix4.translation(Vector3(x, y, 0));
+    return t.multiplied(matrix);
+  }
+
+  // https://api.skia.org/classSkMatrix.html#a077a39b1cd5c1a7861562f9f20dd1395
+  static Matrix4 _postRotate(double degrees, Matrix4 matrix) {
+    final t = Matrix4.rotationZ(degrees);
+    return t.multiplied(matrix);
+  }
+
+  //And the transformations are applied in the order of scale, rotate then translate.
+  /* https://github.com/aosp-mirror/platform_frameworks_base/blob/47fed6ba6ab8a68267a9b3ac6cb9decd4ba122ed/libs/hwui/VectorDrawable.cpp
+    outMatrix->reset();
+    // TODO: use rotate(mRotate, mPivotX, mPivotY) and scale with pivot point, instead of
+    // translating to pivot for rotating and scaling, then translating back.
+    outMatrix->postTranslate(-properties.getPivotX(), -properties.getPivotY());
+    outMatrix->postScale(properties.getScaleX(), properties.getScaleY());
+    outMatrix->postRotate(properties.getRotation(), 0, 0);
+    outMatrix->postTranslate(properties.getTranslateX() + properties.getPivotX(),
+            properties.getTranslateY() + properties.getPivotY());
+  */
+  static Matrix4 _groupTransform(
+    double rotation,
+    double pivotX,
+    double pivotY,
+    double scaleX,
+    double scaleY,
+    double translateX,
+    double translateY,
+  ) {
+    var transform = Matrix4.identity();
+    transform = _postTranslate(
+      -pivotX,
+      -pivotY,
+      transform,
+    );
+    transform = _postScale(
+      scaleX,
+      scaleY,
+      transform,
+    );
+    transform = _postRotate(
+      _degToRad(rotation),
+      transform,
+    );
+    transform = _postTranslate(
+      translateX + pivotX,
+      translateY + pivotY,
+      transform,
+    );
+    return transform;
+  }
+}
+
+abstract class StyleMapping implements StyleResolver, Diagnosticable {
   const StyleMapping();
   static const StyleMapping empty = _EmptyStyleMapping();
-  factory StyleMapping.fromMap(Map<String, Color> map, {String namespace}) =
+  factory StyleMapping.fromMap(Map<String, Object> map, {String namespace}) =
       _MapStyleMapping;
 
-  bool contains(StyleColor color);
-  bool containsAny(Set<StyleColor> colors);
-  Color? styled(StyleColor color);
+  bool contains(StyleProperty prop);
+  bool containsAny(Set<StyleProperty> props);
   StyleMapping mergeWith(StyleMapping other) =>
       _MergedStyleMapping(this, other);
-  Color? resolve(ColorOrStyleColor color) =>
-      color.color ?? styled(color.styleColor!);
+}
+
+class _PathValues {
+  final PathData pathData;
+  final Color? fillColor;
+  final Color? strokeColor;
+  final double strokeWidth;
+  final double strokeAlpha;
+  final double fillAlpha;
+  final double trimPathStart;
+  final double trimPathEnd;
+  final double trimPathOffset;
+
+  _PathValues(
+    this.pathData,
+    this.fillColor,
+    this.strokeColor,
+    this.strokeWidth,
+    this.strokeAlpha,
+    this.fillAlpha,
+    this.trimPathStart,
+    this.trimPathEnd,
+    this.trimPathOffset,
+  );
+}
+
+enum RenderVectorCachingStrategy {
+  groupAndPath,
+  group,
+  path,
+  none,
 }
 
 class RenderVector extends RenderBox {
+  final Map<Group, _GroupValues> _groupCache = {};
+  final Map<Path, _PathValues> _pathCache = {};
   RenderVector({
     required Vector vector,
     required double devicePixelRatio,
     required double textScaleFactor,
     required TextDirection textDirection,
-    required StyleMapping styleMapping,
+    required StyleResolver styleMapping,
+    required RenderVectorCachingStrategy cachingStrategy,
   })  : _vector = vector,
         _devicePixelRatio = devicePixelRatio,
         _textScaleFactor = textScaleFactor,
         _textDirection = textDirection,
-        _styleMapping = styleMapping;
+        _styleMapping = styleMapping,
+        _cachingStrategy = cachingStrategy;
 
   Vector _vector;
   Vector get vector => _vector;
@@ -290,6 +443,8 @@ class RenderVector extends RenderBox {
     if (identical(_vector, vector)) {
       return;
     }
+    _groupCache.clear();
+    _pathCache.clear();
     if (vector.width != _vector.width || vector.height != _vector.height) {
       markNeedsLayout();
     }
@@ -333,19 +488,56 @@ class RenderVector extends RenderBox {
     _textDirection = textDirection;
   }
 
-  StyleMapping _styleMapping;
-  StyleMapping get styleMapping => _styleMapping;
-  set styleMapping(StyleMapping styleMapping) {
+  StyleResolver _styleMapping;
+  StyleResolver get styleMapping => _styleMapping;
+  set styleMapping(StyleResolver styleMapping) {
     if (_styleMapping == styleMapping) {
       return;
     }
 
-    final currentContains = styleMapping.containsAny(vector.usedColors);
-    if (currentContains ||
-        currentContains != _styleMapping.containsAny(vector.usedColors)) {
+    if (cachingStrategy != RenderVectorCachingStrategy.none) {
+      final currentContains = styleMapping.containsAny(vector.usedStyles);
+      if (currentContains ||
+          currentContains != _styleMapping.containsAny(vector.usedStyles)) {
+        markNeedsPaint();
+      }
+      if (cachingStrategy == RenderVectorCachingStrategy.group ||
+          cachingStrategy == RenderVectorCachingStrategy.groupAndPath) {
+        for (final g in _groupCache.keys.toList()) {
+          if (styleMapping.containsAny(g.localUsedStyles)) {
+            _groupCache.remove(g);
+          }
+        }
+      }
+      if (cachingStrategy == RenderVectorCachingStrategy.path ||
+          cachingStrategy == RenderVectorCachingStrategy.groupAndPath) {
+        for (final p in _pathCache.keys.toList()) {
+          if (styleMapping.containsAny(p.usedStyles)) {
+            _pathCache.remove(p);
+          }
+        }
+      }
+    } else {
       markNeedsPaint();
     }
     _styleMapping = styleMapping;
+  }
+
+  RenderVectorCachingStrategy _cachingStrategy;
+  RenderVectorCachingStrategy get cachingStrategy => _cachingStrategy;
+  set cachingStrategy(RenderVectorCachingStrategy cachingStrategy) {
+    if (_cachingStrategy == cachingStrategy) {
+      return;
+    }
+    _cachingStrategy = cachingStrategy;
+    if (cachingStrategy == RenderVectorCachingStrategy.group) {
+      _pathCache.clear();
+    } else if (cachingStrategy == RenderVectorCachingStrategy.path) {
+      _groupCache.clear();
+    } else if (cachingStrategy == RenderVectorCachingStrategy.none) {
+      _pathCache.clear();
+      _groupCache.clear();
+    }
   }
 
   @override
@@ -356,7 +548,7 @@ class RenderVector extends RenderBox {
     properties.add(DoubleProperty('textScaleFactor', textScaleFactor));
     properties.add(EnumProperty('textDirection', textDirection));
     properties.add(DiagnosticsProperty('styleMapping', styleMapping,
-        defaultValue: StyleMapping.empty));
+        defaultValue: StyleMapping.empty, style: DiagnosticsTreeStyle.sparse));
   }
 
   Size _layoutUnconstrained() =>
@@ -403,72 +595,39 @@ class RenderVector extends RenderBox {
 
   @override
   bool get needsCompositing => true;
-  static bool _groupHasTransform(Group group) =>
-      (group.rotation != null && group.rotation != 0) ||
-      group.scaleX != null ||
-      group.scaleY != null ||
-      group.translateX != null ||
-      group.translateY != null;
-
-  static double _degToRad(double deg) => (deg / 360) * 2 * pi;
-
-  // https://api.skia.org/classSkMatrix.html#a4fb81568e425b3a6fb5984dac12abb8e
-  static Matrix4 _postScale(double x, double y, Matrix4 matrix) {
-    final t = Matrix4.diagonal3(Vector3(x, y, 1));
-    return t.multiplied(matrix);
-  }
-
-  // https://api.skia.org/classSkMatrix.html#a83c8625b53e9a511076b19b92e0f98d0
-  static Matrix4 _postTranslate(double x, double y, Matrix4 matrix) {
-    final t = Matrix4.translation(Vector3(x, y, 0));
-    return t.multiplied(matrix);
-  }
-
-  // https://api.skia.org/classSkMatrix.html#a077a39b1cd5c1a7861562f9f20dd1395
-  static Matrix4 _postRotate(double degrees, Matrix4 matrix) {
-    final t = Matrix4.rotationZ(degrees);
-    return t.multiplied(matrix);
-  }
-
-  //And the transformations are applied in the order of scale, rotate then translate.
-  /* https://github.com/aosp-mirror/platform_frameworks_base/blob/47fed6ba6ab8a68267a9b3ac6cb9decd4ba122ed/libs/hwui/VectorDrawable.cpp
-    outMatrix->reset();
-    // TODO: use rotate(mRotate, mPivotX, mPivotY) and scale with pivot point, instead of
-    // translating to pivot for rotating and scaling, then translating back.
-    outMatrix->postTranslate(-properties.getPivotX(), -properties.getPivotY());
-    outMatrix->postScale(properties.getScaleX(), properties.getScaleY());
-    outMatrix->postRotate(properties.getRotation(), 0, 0);
-    outMatrix->postTranslate(properties.getTranslateX() + properties.getPivotX(),
-            properties.getTranslateY() + properties.getPivotY());
-  */
-  static Matrix4 _groupTransform(Group group) {
-    var transform = Matrix4.identity();
-    transform = _postTranslate(
-      -(group.pivotX ?? 0.0),
-      -(group.pivotY ?? 0.0),
-      transform,
-    );
-    transform = _postScale(
-      group.scaleX ?? 1.0,
-      group.scaleY ?? 1.0,
-      transform,
-    );
-    transform = _postRotate(
-      _degToRad(group.rotation ?? 0.0),
-      transform,
-    );
-    transform = _postTranslate(
-      (group.translateX ?? 0.0) + (group.pivotX ?? 0.0),
-      (group.translateY ?? 0.0) + (group.pivotY ?? 0.0),
-      transform,
-    );
-    return transform;
-  }
 
   void _paintGroup(Canvas canvas, Group group) {
-    if (_groupHasTransform(group)) {
+    _GroupValues values;
+    if (cachingStrategy == RenderVectorCachingStrategy.group ||
+        cachingStrategy == RenderVectorCachingStrategy.groupAndPath) {
+      values = _groupCache.putIfAbsent(
+        group,
+        () => _GroupValues(
+          group.rotation?.resolve(styleMapping),
+          group.pivotX?.resolve(styleMapping),
+          group.pivotY?.resolve(styleMapping),
+          group.scaleX?.resolve(styleMapping),
+          group.scaleY?.resolve(styleMapping),
+          group.translateX?.resolve(styleMapping),
+          group.translateY?.resolve(styleMapping),
+        ),
+      );
+    } else {
+      values = _GroupValues(
+        group.rotation?.resolve(styleMapping),
+        group.pivotX?.resolve(styleMapping),
+        group.pivotY?.resolve(styleMapping),
+        group.scaleX?.resolve(styleMapping),
+        group.scaleY?.resolve(styleMapping),
+        group.translateX?.resolve(styleMapping),
+        group.translateY?.resolve(styleMapping),
+      );
+    }
+
+    final transform = values.transform;
+    if (transform != null) {
       canvas.save();
-      canvas.transform(_groupTransform(group).storage);
+      canvas.transform(transform.storage);
       _paintChildren(canvas, group.children);
       canvas.restore();
     } else {
@@ -486,7 +645,7 @@ class RenderVector extends RenderBox {
         ..arcSweep = source.arcSweep
         ..arcLarge = source.arcLarge;
 
-  static ui.Path _uiPathForPath(Path path) {
+  static ui.Path _uiPathForPath(_PathValues path) {
     final normalizer = SvgPathNormalizer();
     final creator = _UiPathBuilderProxy();
     final mutableSegment = PathSegmentData();
@@ -498,9 +657,9 @@ class RenderVector extends RenderBox {
   }
 
   // TODO: trimPathStart, trimPathEnd, trimPathOffset, fillType
-  static Paint _paintForPath(Path path) {
+  static Paint _paintForPath(Path path, _PathValues values) {
     final paint = Paint()
-      ..strokeWidth = path.strokeWidth
+      ..strokeWidth = values.strokeWidth
       ..strokeMiterLimit = path.strokeMiterLimit;
 
     switch (path.strokeLineCap) {
@@ -532,24 +691,57 @@ class RenderVector extends RenderBox {
     if (path.strokeColor == null && path.fillColor == null) {
       return;
     }
-    final paint = _paintForPath(path);
-    final uiPath = _uiPathForPath(path);
-    if (path.fillColor != null) {
-      final complexColor = path.fillColor!;
-      final fillColor =
-          complexColor.color ?? styleMapping.styled(complexColor.styleColor!);
+    _PathValues values;
+    if (cachingStrategy == RenderVectorCachingStrategy.path ||
+        cachingStrategy == RenderVectorCachingStrategy.groupAndPath) {
+      values = _pathCache.putIfAbsent(
+        path,
+        () => _PathValues(
+          path.pathData.resolve(styleMapping)!,
+          path.fillColor?.resolve(styleMapping),
+          path.strokeColor?.resolve(styleMapping),
+          path.strokeWidth.resolve(styleMapping)!,
+          path.strokeAlpha.resolve(styleMapping)!,
+          path.fillAlpha.resolve(styleMapping)!,
+          path.trimPathStart.resolve(styleMapping)!,
+          path.trimPathEnd.resolve(styleMapping)!,
+          path.trimPathOffset.resolve(styleMapping)!,
+        ),
+      );
+    } else {
+      values = _PathValues(
+        path.pathData.resolve(styleMapping)!,
+        path.fillColor?.resolve(styleMapping),
+        path.strokeColor?.resolve(styleMapping),
+        path.strokeWidth.resolve(styleMapping)!,
+        path.strokeAlpha.resolve(styleMapping)!,
+        path.fillAlpha.resolve(styleMapping)!,
+        path.trimPathStart.resolve(styleMapping)!,
+        path.trimPathEnd.resolve(styleMapping)!,
+        path.trimPathOffset.resolve(styleMapping)!,
+      );
+    }
+    if (values.strokeColor == null && values.fillColor == null) {
+      return;
+    }
+
+    if (values.strokeColor == Colors.transparent &&
+        values.fillColor == Colors.transparent) {
+      return;
+    }
+    final paint = _paintForPath(path, values);
+    final uiPath = _uiPathForPath(values);
+    if (values.fillColor != null) {
       paint
-        ..color = fillColor?.withOpacity(path.fillAlpha) ?? Colors.transparent
+        ..color = values.fillColor?.withOpacity(values.fillAlpha) ??
+            Colors.transparent
         ..style = PaintingStyle.fill;
       canvas.drawPath(uiPath, paint);
     }
     if (path.strokeColor != null) {
-      final complexColor = path.strokeColor!;
-      final strokeColor =
-          complexColor.color ?? styleMapping.styled(complexColor.styleColor!);
       paint
-        ..color =
-            strokeColor?.withOpacity(path.strokeAlpha) ?? Colors.transparent
+        ..color = values.strokeColor?.withOpacity(values.strokeAlpha) ??
+            Colors.transparent
         ..style = PaintingStyle.stroke;
       canvas.drawPath(uiPath, paint);
     }
@@ -576,7 +768,8 @@ class RenderVector extends RenderBox {
     }
     var heightScale = size.height / vector.viewportHeight;
     transform.scale(widthScale, heightScale);
-    context.pushOpacity(offset, (vector.opacity * 255).toInt(),
+    context.pushOpacity(
+        offset, (vector.opacity.resolve(styleMapping)! * 255).toInt(),
         (context, offset) {
       context.pushTransform(
         needsCompositing,
@@ -590,7 +783,7 @@ class RenderVector extends RenderBox {
             canvas.saveLayer(
                 null,
                 Paint()
-                  ..color = vector.tint!
+                  ..color = vector.tint!.resolve(styleMapping)!
                   ..blendMode = vector.tintMode);
           }
           _paintChildren(canvas, vector.children);
