@@ -3,11 +3,13 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide Animation;
 import 'package:flutter/material.dart' as flt show Animation;
+import 'package:vector_drawable/src/model/style.dart';
 import '../model/vector_drawable.dart';
 import 'vector.dart';
 import 'package:path_parsing/path_parsing.dart';
 import 'package:value_notifier/value_notifier.dart';
-
+import 'package:value_notifier/src/idisposable_change_notifier.dart';
+import 'package:value_notifier/src/handle.dart';
 import '../model/animated_vector_drawable.dart';
 import '../model/animation.dart';
 
@@ -34,6 +36,13 @@ const _kThemableAttributes = {
   'trimPathOffset',
 // TODO: clip path
 };
+
+class _StartOffsetAndThemableAttributes {
+  final int startOffset;
+  final List<String> themableAttributes;
+
+  _StartOffsetAndThemableAttributes(this.startOffset, this.themableAttributes);
+}
 
 extension on Vector {
   Object? getThemeableAttribute(String name) {
@@ -102,7 +111,49 @@ extension on VectorDrawableNode {
   }
 }
 
-class _InterpolatedProperty {
+class AnimationStyleResolver extends StyleMapping with DiagnosticableTreeMixin {
+  final StyleMapping parentResolver;
+  final List<_InterpolatedProperty> properties;
+
+  AnimationStyleResolver(
+    this.parentResolver,
+    this.properties,
+  );
+
+  static const kNamespace = 'runtime-animation';
+
+  @override
+  T? resolve<T>(StyleProperty property) {
+    if (property.namespace != kNamespace) {
+      return parentResolver.resolve(property);
+    }
+    final index = int.parse(property.name);
+    return properties[index].resolve(parentResolver) as T;
+  }
+
+  @override
+  bool containsAny(Set<StyleProperty> props) =>
+      props.any((e) => e.namespace == kNamespace) ||
+      parentResolver.containsAny(props);
+
+  @override
+  bool contains(StyleProperty prop) =>
+      prop.namespace == kNamespace || parentResolver.contains(prop);
+
+  @override
+  List<DiagnosticsNode> debugDescribeChildren() =>
+      properties.map((e) => e.toDiagnosticsNode()).toList();
+
+  @override
+  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+    super.debugFillProperties(properties);
+    properties.add(DiagnosticsProperty('parentResolver', parentResolver));
+  }
+}
+
+class _InterpolatedProperty
+    with Diagnosticable
+    implements StyleResolvable<Object> {
   final Object a;
   final Object b;
   final double t;
@@ -111,13 +162,50 @@ class _InterpolatedProperty {
 
   static Object resolveAs(
     Object value,
-    StyleMapping mapping,
+    StyleResolver mapping,
   ) =>
-      value is _InterpolatedProperty ? value.resolve(mapping) : value;
-  Object resolve(StyleMapping mapping) => lerpValues(a, b, t, mapping);
+      value is StyleResolvable
+          ? resolveAs(value.resolve(mapping), mapping)
+          : value;
+
+  static Object lerpValues(
+    Object a,
+    Object b,
+    double t,
+    StyleResolver resolver,
+  ) {
+    a = _InterpolatedProperty.resolveAs(a, resolver);
+    b = _InterpolatedProperty.resolveAs(b, resolver);
+    if (a is num && b is num) {
+      return lerpNum(a, b, t);
+    }
+    if (a is PathData && b is PathData) {
+      return lerpPathData(a, b, t);
+    }
+    if (a is Color && b is Color) {
+      return Color.lerp(a, b, t)!;
+    }
+    throw TypeError();
+  }
+
+  Object resolve(StyleResolver resolver) => lerpValues(a, b, t, resolver);
+
+  @override
+  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+    super.debugFillProperties(properties);
+    if (a == b) {
+      properties.add(DiagnosticsProperty('value', a));
+      return;
+    }
+    properties.add(DiagnosticsProperty('a', a));
+    properties.add(DiagnosticsProperty('b', b));
+    properties.add(PercentProperty('t', t));
+  }
 }
 
-class ObjectAnimator extends Animator with Diagnosticable {
+void _ignore(Object _) {}
+
+class ObjectAnimator extends AnimatorWithValues {
   final ObjectAnimation animation;
   final ObjectAnimatorTween tween;
   final AnimationController controller;
@@ -150,8 +238,7 @@ class ObjectAnimator extends Animator with Diagnosticable {
     );
   }
 
-  Map<String, Object> values(StyleMapping styleMapping) =>
-      tween.lerp(controller.value, styleMapping);
+  Map<String, _InterpolatedProperty> get values => tween.lerp(controller.value);
 
   void dispose() {
     _status.dispose();
@@ -165,8 +252,6 @@ class ObjectAnimator extends Animator with Diagnosticable {
       controller.value = 1;
     }
   }
-
-  static void _ignore(Object _) {}
 
   @override
   Future<void> start({bool forward = true, bool fromStart = false}) async {
@@ -222,6 +307,14 @@ class ObjectAnimator extends Animator with Diagnosticable {
     properties.add(DiagnosticsProperty('controller', controller));
     properties.add(DiagnosticsProperty('status', _status.value));
   }
+
+  @override
+  Iterable<String> get nonUniqueAnimatedAttributes =>
+      tween._holderTweens.map((e) => e.propertyName);
+}
+
+abstract class AnimatorWithValues extends Animator {
+  Map<String, _InterpolatedProperty> get values;
 }
 
 abstract class Animator with Diagnosticable {
@@ -234,24 +327,76 @@ abstract class Animator with Diagnosticable {
   ValueListenable<bool> get isDismissed =>
       status.map((status) => status == AnimationStatus.dismissed);
   ValueListenable<AnimationStatus> get status;
-  ValueListenable<void> get changes;
+  Listenable get changes;
   Duration get totalDuration;
+  Iterable<String> get nonUniqueAnimatedAttributes;
 }
 
 typedef AnimationFactory = Animator Function({required TickerProvider vsync});
 
-class SequentialAnimatorSet extends AnimatorSet {
-  final ProxyValueListenable<AnimationStatus> _status;
+class StatusValueListenable extends IDisposableValueNotifier<AnimationStatus> {
+  final AnimationController _controller;
 
-  SequentialAnimatorSet._(List<Animator> children)
-      : _status = ProxyValueListenable(
-          children.first.status,
-        ),
+  StatusValueListenable(this._controller) : super(_controller.status);
+
+  bool _didListen = false;
+  @override
+  void addListener(VoidCallback listener) {
+    if (!_didListen) {
+      _controller.addStatusListener(_onStatus);
+      _didListen = true;
+    }
+    super.addListener(listener);
+  }
+
+  void _onStatus(AnimationStatus status) => value = status;
+
+  void dispose() {
+    if (_didListen) {
+      _controller.removeStatusListener(_onStatus);
+    }
+    super.dispose();
+  }
+
+  @override
+  AnimationStatus get value => _didListen ? super.value : _controller.status;
+}
+
+class ListenableValueListenable extends IDisposableValueListenable<void>
+    with IDisposableMixin {
+  final ListenableHandle _base;
+
+  ListenableValueListenable(Listenable base) : _base = ListenableHandle(base);
+  @override
+  void addListener(VoidCallback listener) => _base.addListener(listener);
+
+  @override
+  void removeListener(VoidCallback listener) => _base.removeListener(listener);
+
+  void dispose() {
+    _base.dispose();
+    super.dispose();
+  }
+
+  @override
+  void get value => null;
+}
+
+extension on Listenable {
+  ValueListenable<void> get asValueListenable =>
+      ListenableValueListenable(this);
+}
+
+class SequentialAnimatorSet extends AnimatorSet {
+  final ValueNotifier<AnimatorWithValues> _current;
+
+  SequentialAnimatorSet._(List<AnimatorWithValues> children)
+      : _current = ValueNotifier(children.first),
         super._(children);
   @override
   void reset({bool toFinish = false}) {
     super.reset(toFinish: toFinish);
-    _status.base = toFinish ? children.last.status : children.first.status;
+    _current.value = toFinish ? children.last : children.first;
   }
 
   @override
@@ -260,9 +405,14 @@ class SequentialAnimatorSet extends AnimatorSet {
       reset(toFinish: !forward);
     }
     for (final animation in forward ? children : children.reversed) {
-      _status.base = animation.status;
+      _current.value = animation;
+      final startTime = DateTime.now();
+      print('$startTime Starting $animation');
       try {
         await animation.start(forward: forward, fromStart: fromStart);
+        final finishTime = DateTime.now();
+        print(
+            '$finishTime Finished $animation, took ${finishTime.difference(startTime).inMilliseconds}ms');
       } on TickerCanceled {
         break;
       }
@@ -270,15 +420,24 @@ class SequentialAnimatorSet extends AnimatorSet {
   }
 
   @override
-  ValueListenable<AnimationStatus> get status => _status.view();
+  ValueListenable<AnimationStatus> get status =>
+      _current.view().bind((current) => current.status);
+
+  void dispose() {
+    _current.dispose();
+    super.dispose();
+  }
 
   @override
   Duration get totalDuration =>
       children.fold(Duration.zero, (acc, b) => acc + b.totalDuration);
 
   @override
-  ValueListenable<void> get changes => children.fold(
-      SingleValueListenable(null), (acc, e) => acc.bind((_) => e.changes));
+  Listenable get changes =>
+      _current.view().bind((c) => c.changes.asValueListenable);
+
+  @override
+  Map<String, _InterpolatedProperty> get values => {..._current.value.values};
 }
 
 class EmptyAnimatorSet extends AnimatorSet {
@@ -296,52 +455,79 @@ class EmptyAnimatorSet extends AnimatorSet {
 
   @override
   ValueListenable<void> get changes => SingleValueListenable(null);
+
+  @override
+  Map<String, _InterpolatedProperty> get values => const {};
 }
 
 class TogetherAnimatorSet extends AnimatorSet {
-  final ValueListenable<AnimationStatus> _status;
+  final AnimatorWithValues _longest;
 
-  TogetherAnimatorSet._(List<Animator> children)
-      : _status = children
-            .reduce((a, b) => a.totalDuration > b.totalDuration ? a : b)
-            .status,
+  TogetherAnimatorSet._(List<AnimatorWithValues> children)
+      : _longest = children
+            .reduce((a, b) => a.totalDuration > b.totalDuration ? a : b),
         super._(children);
   @override
   Future<void> start({bool forward = true, bool fromStart = false}) async {
+    Future<void>? fut;
     for (final animation in children) {
-      animation.start(forward: forward, fromStart: fromStart).ignore();
+      final animFut = animation
+          .start(
+            forward: forward,
+            fromStart: fromStart,
+          )
+          .catchError(_ignore);
+      if (animation == _longest) {
+        fut = animFut;
+      }
     }
+    await fut!;
   }
 
   @override
-  ValueListenable<AnimationStatus> get status => _status.view();
+  ValueListenable<AnimationStatus> get status => _longest.status;
 
   @override
   Duration get totalDuration =>
       children.fold(Duration.zero, (acc, b) => acc + b.totalDuration);
 
   @override
-  ValueListenable<void> get changes => children
+  Listenable get changes => children
       .reduce((a, b) => a.totalDuration > b.totalDuration ? a : b)
       .changes;
+
+  @override
+  Map<String, _InterpolatedProperty> get values => {
+        for (final e in children) ...e.values,
+      };
 }
 
-VectorDrawableNode buildTargetFromProperties(
-  StyleMapping styleMapping,
-  Map<String, Object> targetProperties,
+final Map<VectorDrawableNode, _StartOffsetAndThemableAttributes> _nodePropsMap =
+    {};
+int startOffset = 0;
+
+VectorDrawableNode buildAnimatableTargetFromProperties(
+  List<String> animatableProperties,
   VectorDrawableNode target,
   VectorDrawableNode Function(
     VectorDrawableNode,
-    StyleMapping,
   )
       buildChild,
 ) {
-  T prop<T>(T otherwise, String name) {
-    assert(_kThemableAttributes.contains(name));
-    if (targetProperties.containsKey(name)) {
-      return targetProperties[name] as T;
+  final targetStartOffset = startOffset;
+  _nodePropsMap[target] = _StartOffsetAndThemableAttributes(
+      targetStartOffset, animatableProperties);
+  startOffset += animatableProperties.length;
+
+  StyleOr<T>? prop<T>(StyleOr<T>? otherwise, String name) {
+    final i = animatableProperties.indexOf(name);
+    if (i == -1) {
+      return otherwise;
     }
-    return otherwise;
+    return StyleOr.style(
+      StyleProperty(AnimationStyleResolver.kNamespace,
+          (i + targetStartOffset).toString()),
+    );
   }
 
   final t = target;
@@ -355,11 +541,8 @@ VectorDrawableNode buildTargetFromProperties(
       tint: t.tint,
       tintMode: t.tintMode,
       autoMirrored: t.autoMirrored,
-      opacity: prop(t.opacity, 'alpha'),
-      children: t.children
-          .map((child) => buildChild(child, styleMapping))
-          .toList()
-          .cast(),
+      opacity: prop(t.opacity, 'alpha')!,
+      children: t.children.map(buildChild).toList().cast(),
     );
   } else if (t is Group) {
     return Group(
@@ -380,23 +563,20 @@ VectorDrawableNode buildTargetFromProperties(
       ),
       translateX: prop(t.translateX, 'translateX'),
       translateY: prop(t.translateY, 'translateY'),
-      children: t.children
-          .map((child) => buildChild(child, styleMapping))
-          .toList()
-          .cast(),
+      children: t.children.map(buildChild).toList().cast(),
     );
   } else if (t is Path) {
     return Path(
       name: t.name,
-      pathData: prop(t.pathData, 'pathData'),
+      pathData: prop(t.pathData, 'pathData')!,
       fillColor: prop(t.fillColor, 'fillColor'),
       strokeColor: prop(t.strokeColor, 'strokeColor'),
-      strokeWidth: prop(t.strokeWidth, 'strokeWidth'),
-      strokeAlpha: prop(t.strokeAlpha, 'strokeAlpha'),
-      fillAlpha: prop(t.fillAlpha, 'fillAlpha'),
-      trimPathStart: prop(t.trimPathStart, 'trimPathStart'),
-      trimPathEnd: prop(t.trimPathEnd, 'trimPathEnd'),
-      trimPathOffset: prop(t.trimPathOffset, 'trimPathOffset'),
+      strokeWidth: prop(t.strokeWidth, 'strokeWidth')!,
+      strokeAlpha: prop(t.strokeAlpha, 'strokeAlpha')!,
+      fillAlpha: prop(t.fillAlpha, 'fillAlpha')!,
+      trimPathStart: prop(t.trimPathStart, 'trimPathStart')!,
+      trimPathEnd: prop(t.trimPathEnd, 'trimPathEnd')!,
+      trimPathOffset: prop(t.trimPathOffset, 'trimPathOffset')!,
       strokeLineCap: t.strokeLineCap,
       strokeLineJoin: t.strokeLineJoin,
       strokeMiterLimit: t.strokeMiterLimit,
@@ -407,8 +587,9 @@ VectorDrawableNode buildTargetFromProperties(
   }
 }
 
-abstract class AnimatorSet extends Animator with DiagnosticableTreeMixin {
-  final List<Animator> children;
+abstract class AnimatorSet extends AnimatorWithValues
+    with DiagnosticableTreeMixin {
+  final List<AnimatorWithValues> children;
   AnimatorSet._(this.children);
 
   List<DiagnosticsNode> debugDescribeChildren() =>
@@ -416,7 +597,7 @@ abstract class AnimatorSet extends Animator with DiagnosticableTreeMixin {
 
   factory AnimatorSet({
     required AnimationSet animation,
-    required Animator Function(AnimationNode) childFactory,
+    required AnimatorWithValues Function(AnimationNode) childFactory,
   }) {
     if (animation.children.isEmpty) {
       return EmptyAnimatorSet._();
@@ -450,6 +631,10 @@ abstract class AnimatorSet extends Animator with DiagnosticableTreeMixin {
       animation.stop(reset: reset);
     }
   }
+
+  @override
+  Iterable<String> get nonUniqueAnimatedAttributes =>
+      children.expand((e) => e.nonUniqueAnimatedAttributes);
 }
 
 class ObjectAnimatorTween {
@@ -479,10 +664,8 @@ class ObjectAnimatorTween {
     ]);
   }
 
-  Map<String, Object> lerp(double t, StyleMapping styleMapping) => {
-        for (final tween in _holderTweens)
-          tween.propertyName: tween.lerp(t, styleMapping)
-      };
+  Map<String, _InterpolatedProperty> lerp(double t) =>
+      {for (final tween in _holderTweens) tween.propertyName: tween.lerp(t)};
 }
 
 class PropertyValueHolderTween extends ValueTween {
@@ -507,11 +690,11 @@ class PropertyValueHolderTween extends ValueTween {
   }
 
   @override
-  Object lerp(double t, StyleMapping s) => _tween.lerp(t, s);
+  _InterpolatedProperty lerp(double t) => _tween.lerp(t);
 }
 
 abstract class ValueTween {
-  Object lerp(double t, StyleMapping s);
+  _InterpolatedProperty lerp(double t);
 }
 
 class KeyframeGroup implements ValueTween {
@@ -592,9 +775,8 @@ class KeyframeGroup implements ValueTween {
   );
 
   @override
-  Object lerp(
+  _InterpolatedProperty lerp(
     double t,
-    StyleMapping mapping,
   ) {
     for (var i = 0; i < keyframeFractions.length - 1; i++) {
       final frac = keyframeFractions[i];
@@ -606,14 +788,14 @@ class KeyframeGroup implements ValueTween {
       final tFromFracToNext = (t - frac) / delta;
       final nextInterpolator = keyframeCurves[i + 1];
       final transformedT = nextInterpolator.transform(tFromFracToNext);
-      return lerpValues(
+      return _InterpolatedProperty(
         keyframeValues[i],
         keyframeValues[i + 1],
         transformedT,
-        mapping,
       );
     }
-    return keyframeValues.last;
+    // TODO: single
+    return _InterpolatedProperty(keyframeValues.last, keyframeValues.last, 1);
   }
 }
 
@@ -630,28 +812,6 @@ num lerpNum(num a, num b, double t) {
     return lerped.toInt();
   }
   return lerped;
-}
-
-Object lerpValues(
-  Object a,
-  Object b,
-  double t,
-  StyleMapping mapping,
-) {
-  a = _InterpolatedProperty.resolveAs(a, mapping);
-  b = _InterpolatedProperty.resolveAs(b, mapping);
-  if (a is num && b is num) {
-    return lerpNum(a, b, t);
-  }
-  if (a is PathData && b is PathData) {
-    return lerpPathData(a, b, t);
-  }
-  if (a is ColorOrStyleColor && b is ColorOrStyleColor) {
-    final colorA = mapping.resolve(a);
-    final colorB = mapping.resolve(b);
-    return Color.lerp(colorA, colorB, t)!;
-  }
-  throw TypeError();
 }
 
 PathSegmentData lerpPathSegment(
@@ -688,7 +848,8 @@ class Interpolation implements ValueTween {
   });
 
   @override
-  Object lerp(double t, StyleMapping s) => lerpValues(begin, end, t, s);
+  _InterpolatedProperty lerp(double t) =>
+      _InterpolatedProperty(begin, end, curve.transform(t));
 }
 
 class AnimatedVectorWidget extends StatefulWidget {
@@ -738,6 +899,7 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
     with TickerProviderStateMixin
     implements Animator {
   late final Vector base = widget.animatedVector.drawable.resource!.body;
+  late final Vector animatable;
   final Map<VectorDrawableNode, Set<ObjectAnimator>> elementAnimators = {};
   late final Map<String, VectorDrawableNode> namedBaseElements =
       _namedBaseVectorElements(base);
@@ -749,7 +911,7 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
     }
     final targetElement = namedBaseElements[target.name]!;
     final anim = target.animation.resource!;
-    Animator buildAnimator(AnimationNode node) {
+    AnimatorWithValues buildAnimator(AnimationNode node) {
       if (node is AnimationSet) {
         return AnimatorSet(animation: node, childFactory: buildAnimator);
       }
@@ -782,6 +944,7 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
     root = widget.animatedVector.children.isEmpty
         ? EmptyAnimatorSet._()
         : _createTargetAnimators();
+    animatable = _buildAnimatableVector();
   }
 
   void dispose() {
@@ -789,39 +952,60 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
     super.dispose();
   }
 
-  Map<String, Object> _propertiesFromNode(
+  List<String> _propertiesFromNode(
     VectorDrawableNode node,
-    StyleMapping styleMapping,
   ) {
     if (!elementAnimators.containsKey(node)) {
-      return const {};
+      return const [];
     }
     final animators = elementAnimators[node]!;
-    return animators.fold(
-        {},
-        (acc, e) => e.status.value == root.status.value
-            ? (acc..addAll(e.values(styleMapping)))
-            : acc);
+    return animators
+        .expand((e) => e.nonUniqueAnimatedAttributes)
+        .toSet()
+        .toList();
   }
 
   VectorDrawableNode _buildNodeWithProperties(
     VectorDrawableNode node,
-    StyleMapping styleMapping,
   ) {
-    return buildTargetFromProperties(
-      styleMapping,
-      _propertiesFromNode(node, styleMapping),
+    return buildAnimatableTargetFromProperties(
+      _propertiesFromNode(node),
       node,
       _buildNodeWithProperties,
     );
   }
 
-  Vector _buildVector(StyleMapping styleMapping) =>
-      _buildNodeWithProperties(base, styleMapping) as Vector;
+  Iterable<_InterpolatedProperty> _dynamicPropsFrom(
+    VectorDrawableNode node,
+    Set<ObjectAnimator> animators,
+  ) {
+    final animatableProps = _nodePropsMap[node]!.themableAttributes;
+    final props = {
+      for (final animator in animators) ...animator.values,
+    };
+    // TODO: single interpolated
+    return animatableProps.map(
+      (prop) =>
+          props[prop] ??
+          _InterpolatedProperty(node.getThemeableAttribute(prop)!,
+              node.getThemeableAttribute(prop)!, 1),
+    );
+  }
 
-  Widget _buildVectorWidget(BuildContext context, Vector vector) {
-    return VectorWidget(
-      vector: vector,
+  Vector _buildAnimatableVector() => _buildNodeWithProperties(base) as Vector;
+
+  AnimationStyleResolver _buildResolver(StyleMapping mapping) =>
+      AnimationStyleResolver(
+        mapping,
+        elementAnimators.entries
+            .expand((e) => _dynamicPropsFrom(e.key, e.value))
+            .toList(),
+      );
+
+  Widget _buildVectorWidget(BuildContext context, StyleResolver resolver) {
+    return RawVectorWidget(
+      vector: animatable,
+      styleMapping: resolver,
     );
   }
 
@@ -829,12 +1013,17 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
   Widget build(BuildContext context) {
     final styleMapping = widget.styleMapping
         .mergeWith(ColorSchemeStyleMapping(Theme.of(context).colorScheme));
-    return changes.map((_) => _buildVector(styleMapping)).build(
-        builder: (context, vector, __) => _buildVectorWidget(context, vector));
+    return AnimatedBuilder(
+      animation: changes,
+      builder: (context, _) => _buildVectorWidget(
+        context,
+        _buildResolver(styleMapping),
+      ),
+    );
   }
 
   @override
-  ValueListenable<void> get changes => root.changes;
+  Listenable get changes => root.changes;
 
   @override
   ValueListenable<bool> get isCompleted => root.isCompleted;
@@ -860,4 +1049,7 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
 
   @override
   Duration get totalDuration => root.totalDuration;
+
+  @override
+  Iterable<String> get nonUniqueAnimatedAttributes => [];
 }
