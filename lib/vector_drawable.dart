@@ -1,7 +1,9 @@
 library vector_drawable;
 
-/// A Calculator.
-class Calculator {
-  /// Returns [value] plus 1.
-  int addOne(int value) => value + 1;
-}
+export 'src/model/animated_vector_drawable.dart';
+export 'src/model/vector_drawable.dart';
+export 'src/model/resource.dart';
+export 'src/model/animation.dart';
+
+export 'src/widget/vector.dart';
+export 'src/widget/animated_vector.dart';

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart' hide Animation;
-import 'package:md3_clock/widgets/animated_vector/parsing/resource.dart';
+import 'package:vector_drawable/src/parsing/resource.dart';
 import '../model/animation.dart';
 import 'package:xml/xml.dart';
 import 'package:path_parsing/path_parsing.dart';

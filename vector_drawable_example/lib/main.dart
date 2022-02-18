@@ -1,16 +1,8 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:md3_clock/widgets/animated_vector/widget/vector.dart';
-import 'package:path_parsing/path_parsing.dart';
-import 'package:path_parsing/src/path_segment_type.dart';
+import 'package:vector_drawable/vector_drawable.dart';
 import 'package:xml/xml.dart';
-
-import 'model/animated_vector_drawable.dart';
-import 'model/animation.dart';
-import 'model/resource.dart';
-import 'model/vector_drawable.dart';
-import 'visiting/codegen.dart';
-import 'widget/animated_vector.dart';
+import 'package:vector_drawable/src/visiting/codegen.dart';
 
 void main() {
   print('done');

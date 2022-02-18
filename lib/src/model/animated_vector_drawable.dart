@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart' hide Animation;
-import 'package:md3_clock/widgets/animated_vector/model/resource.dart';
 import 'package:xml/xml.dart';
 import 'package:path_parsing/path_parsing.dart';
 
 import '../parsing/animated_vector_drawable.dart';
 import 'animation.dart';
+import 'resource.dart';
 import 'vector_drawable.dart';
 
 //https://developer.android.com/reference/android/graphics/drawable/AnimatedVectorDrawable

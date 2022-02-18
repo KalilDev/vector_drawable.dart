@@ -3,9 +3,8 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide Animation;
 import 'package:flutter/material.dart' as flt show Animation;
-import 'package:material_widgets/material_widgets.dart';
-import 'package:md3_clock/widgets/animated_vector/model/vector_drawable.dart';
-import 'package:md3_clock/widgets/animated_vector/widget/vector.dart';
+import '../model/vector_drawable.dart';
+import 'vector.dart';
 import 'package:path_parsing/path_parsing.dart';
 import 'package:value_notifier/value_notifier.dart';
 
@@ -116,11 +115,6 @@ class _InterpolatedProperty {
   ) =>
       value is _InterpolatedProperty ? value.resolve(mapping) : value;
   Object resolve(StyleMapping mapping) => lerpValues(a, b, t, mapping);
-}
-
-abstract class Interpolator {
-  const Interpolator();
-  double transform(double t);
 }
 
 class ObjectAnimator extends Animator with Diagnosticable {
@@ -665,8 +659,6 @@ PathSegmentData lerpPathSegment(
   PathSegmentData b,
   double t,
 ) {
-  print(a);
-  print(b);
   return PathSegmentData()
     ..command = t < 0.5 ? a.command : b.command
     ..targetPoint = a.targetPoint * (1.0 - t) + b.targetPoint
@@ -679,8 +671,10 @@ PathSegmentData lerpPathSegment(
 PathData lerpPathData(PathData a, PathData b, double t) {
   final aSegments = a.segments;
   final bSegments = b.segments;
-  return PathData.fromSegments(zip(aSegments, bSegments)
-      .map((e) => lerpPathSegment(e.item1, e.item2, t)));
+  return PathData.fromSegments([
+    for (var i = 0; i < aSegments.length; i++)
+      lerpPathSegment(aSegments[i], bSegments[i], t)
+  ]);
 }
 
 class Interpolation implements ValueTween {
@@ -695,12 +689,6 @@ class Interpolation implements ValueTween {
 
   @override
   Object lerp(double t, StyleMapping s) => lerpValues(begin, end, t, s);
-}
-
-class LinearInterpolator extends Interpolator {
-  const LinearInterpolator();
-  @override
-  double transform(double t) => t;
 }
 
 class AnimatedVectorWidget extends StatefulWidget {
