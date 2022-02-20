@@ -113,7 +113,7 @@ extension on VectorDrawableNode {
 
 class AnimationStyleResolver extends StyleMapping with DiagnosticableTreeMixin {
   final StyleMapping parentResolver;
-  final List<_InterpolatedProperty> properties;
+  final List<StyleResolvable<Object>> properties;
 
   AnimationStyleResolver(
     this.parentResolver,
@@ -205,7 +205,7 @@ class _InterpolatedProperty
 
 void _ignore(Object _) {}
 
-class ObjectAnimator extends AnimatorWithValues {
+class ObjectAnimator extends AnimatorWithValues with Diagnosticable {
   final ObjectAnimation animation;
   final ObjectAnimatorTween tween;
   final AnimationController controller;
@@ -238,7 +238,8 @@ class ObjectAnimator extends AnimatorWithValues {
     );
   }
 
-  Map<String, _InterpolatedProperty> get values => tween.lerp(controller.value);
+  Map<String, StyleResolvable<Object>> get values =>
+      tween.lerp(controller.value);
 
   void dispose() {
     _status.dispose();
@@ -260,17 +261,22 @@ class ObjectAnimator extends AnimatorWithValues {
     if (fromStart) {
       controller.value = start;
     }
+    print(animation.repeatCount);
     final repetitionCount =
-        animation.repeatCount == -1 ? double.infinity : animation.repeatCount;
+        animation.repeatCount == -1.0 ? double.infinity : animation.repeatCount;
     for (var animatedCount = 0;
         animatedCount < repetitionCount + 1;
         animatedCount++) {
       await controller.animateTo(end).catchError(_ignore);
+      print(repetitionCount);
+      print(animatedCount);
       if (animatedCount == repetitionCount) {
         break;
       }
       if (animation.repeatMode == RepeatMode.reverse) {
         await controller.animateTo(start).catchError(_ignore);
+      } else {
+        controller.value = start;
       }
     }
   }
@@ -314,7 +320,7 @@ class ObjectAnimator extends AnimatorWithValues {
 }
 
 abstract class AnimatorWithValues extends Animator {
-  Map<String, _InterpolatedProperty> get values;
+  Map<String, StyleResolvable<Object>> get values;
 }
 
 abstract class Animator with Diagnosticable {
@@ -437,7 +443,7 @@ class SequentialAnimatorSet extends AnimatorSet {
       _current.view().bind((c) => c.changes.asValueListenable);
 
   @override
-  Map<String, _InterpolatedProperty> get values => {..._current.value.values};
+  Map<String, StyleResolvable<Object>> get values => {..._current.value.values};
 }
 
 class EmptyAnimatorSet extends AnimatorSet {
@@ -457,7 +463,7 @@ class EmptyAnimatorSet extends AnimatorSet {
   ValueListenable<void> get changes => SingleValueListenable(null);
 
   @override
-  Map<String, _InterpolatedProperty> get values => const {};
+  Map<String, StyleResolvable<Object>> get values => const {};
 }
 
 class TogetherAnimatorSet extends AnimatorSet {
@@ -497,94 +503,9 @@ class TogetherAnimatorSet extends AnimatorSet {
       .changes;
 
   @override
-  Map<String, _InterpolatedProperty> get values => {
+  Map<String, StyleResolvable<Object>> get values => {
         for (final e in children) ...e.values,
       };
-}
-
-final Map<VectorDrawableNode, _StartOffsetAndThemableAttributes> _nodePropsMap =
-    {};
-int startOffset = 0;
-
-VectorDrawableNode buildAnimatableTargetFromProperties(
-  List<String> animatableProperties,
-  VectorDrawableNode target,
-  VectorDrawableNode Function(
-    VectorDrawableNode,
-  )
-      buildChild,
-) {
-  final targetStartOffset = startOffset;
-  _nodePropsMap[target] = _StartOffsetAndThemableAttributes(
-      targetStartOffset, animatableProperties);
-  startOffset += animatableProperties.length;
-
-  StyleOr<T>? prop<T>(StyleOr<T>? otherwise, String name) {
-    final i = animatableProperties.indexOf(name);
-    if (i == -1) {
-      return otherwise;
-    }
-    return StyleOr.style(
-      StyleProperty(AnimationStyleResolver.kNamespace,
-          (i + targetStartOffset).toString()),
-    );
-  }
-
-  final t = target;
-  if (t is Vector) {
-    return Vector(
-      name: t.name,
-      width: t.width,
-      height: t.height,
-      viewportWidth: t.viewportWidth,
-      viewportHeight: t.viewportHeight,
-      tint: t.tint,
-      tintMode: t.tintMode,
-      autoMirrored: t.autoMirrored,
-      opacity: prop(t.opacity, 'alpha')!,
-      children: t.children.map(buildChild).toList().cast(),
-    );
-  } else if (t is Group) {
-    return Group(
-      name: t.name,
-      rotation: prop(t.rotation, 'rotation'),
-      pivotX: prop(t.pivotX, 'pivotX'),
-      pivotY: prop(
-        t.pivotY,
-        'pivotY',
-      ),
-      scaleX: prop(
-        t.scaleX,
-        'scaleX',
-      ),
-      scaleY: prop(
-        t.scaleY,
-        'scaleY',
-      ),
-      translateX: prop(t.translateX, 'translateX'),
-      translateY: prop(t.translateY, 'translateY'),
-      children: t.children.map(buildChild).toList().cast(),
-    );
-  } else if (t is Path) {
-    return Path(
-      name: t.name,
-      pathData: prop(t.pathData, 'pathData')!,
-      fillColor: prop(t.fillColor, 'fillColor'),
-      strokeColor: prop(t.strokeColor, 'strokeColor'),
-      strokeWidth: prop(t.strokeWidth, 'strokeWidth')!,
-      strokeAlpha: prop(t.strokeAlpha, 'strokeAlpha')!,
-      fillAlpha: prop(t.fillAlpha, 'fillAlpha')!,
-      trimPathStart: prop(t.trimPathStart, 'trimPathStart')!,
-      trimPathEnd: prop(t.trimPathEnd, 'trimPathEnd')!,
-      trimPathOffset: prop(t.trimPathOffset, 'trimPathOffset')!,
-      strokeLineCap: t.strokeLineCap,
-      strokeLineJoin: t.strokeLineJoin,
-      strokeMiterLimit: t.strokeMiterLimit,
-      fillType: t.fillType,
-    );
-  } else {
-    throw UnimplementedError();
-  }
 }
 
 abstract class AnimatorSet extends AnimatorWithValues
@@ -637,8 +558,46 @@ abstract class AnimatorSet extends AnimatorWithValues
       children.expand((e) => e.nonUniqueAnimatedAttributes);
 }
 
-class ObjectAnimatorTween {
+class CoordinateInterpolation implements ValueTween {
+  final StyleOr<PathData> pathData;
+  final bool isX;
+  final Interpolator interpolator;
+
+  CoordinateInterpolation({
+    required this.pathData,
+    required this.isX,
+    required this.interpolator,
+  });
+
+  @override
+  StyleResolvable<Object> lerp(double t) =>
+      _CoordinateInterpolatedValue(pathData, isX, interpolator.transform(t));
+}
+
+class _CoordinateInterpolatedValue
+    with Diagnosticable
+    implements StyleResolvable<Object> {
+  final StyleOr<PathData> pathData;
+  final bool isX;
+  final double t;
+
+  _CoordinateInterpolatedValue(this.pathData, this.isX, this.t);
+
+  @override
+  Object? resolve(StyleResolver resolver) {
+    final path = pathData.resolve(resolver)!;
+    final result = path.evaluateAt(t);
+    print(result);
+    return isX ? result.dx : result.dy;
+  }
+}
+
+class ObjectAnimatorTween with DiagnosticableTreeMixin {
   final List<PropertyValueHolderTween> _holderTweens;
+
+  @override
+  List<DiagnosticsNode> debugDescribeChildren() =>
+      _holderTweens.map((e) => e.toDiagnosticsNode()).toList();
 
   ObjectAnimatorTween._(this._holderTweens);
   factory ObjectAnimatorTween(
@@ -647,12 +606,36 @@ class ObjectAnimatorTween {
   ) {
     if (anim.valueHolders == null) {
       return ObjectAnimatorTween._([
-        PropertyValueHolderTween(
-          anim.propertyName!,
-          Interpolation(
+        if (anim.propertyName != null)
+          PropertyValueHolderTween(
+            anim.propertyName!,
+            Interpolation(
               begin: anim.valueFrom ?? getBaseValue(anim.propertyName!),
-              end: anim.valueTo!),
-        ),
+              end: anim.valueTo!,
+              interpolator:
+                  anim.interpolator?.resource ?? CurveInterpolator.easeInOut,
+            ),
+          ),
+        if (anim.propertyXName != null)
+          PropertyValueHolderTween(
+            anim.propertyXName!,
+            CoordinateInterpolation(
+              pathData: anim.pathData!,
+              isX: true,
+              interpolator:
+                  anim.interpolator?.resource ?? CurveInterpolator.easeInOut,
+            ),
+          ),
+        if (anim.propertyYName != null)
+          PropertyValueHolderTween(
+            anim.propertyYName!,
+            CoordinateInterpolation(
+              pathData: anim.pathData!,
+              isX: false,
+              interpolator:
+                  anim.interpolator?.resource ?? CurveInterpolator.easeInOut,
+            ),
+          ),
       ]);
     }
     return ObjectAnimatorTween._([
@@ -664,11 +647,11 @@ class ObjectAnimatorTween {
     ]);
   }
 
-  Map<String, _InterpolatedProperty> lerp(double t) =>
+  Map<String, StyleResolvable<Object>> lerp(double t) =>
       {for (final tween in _holderTweens) tween.propertyName: tween.lerp(t)};
 }
 
-class PropertyValueHolderTween extends ValueTween {
+class PropertyValueHolderTween extends ValueTween with Diagnosticable {
   final String propertyName;
   final ValueTween _tween;
 
@@ -685,22 +668,43 @@ class PropertyValueHolderTween extends ValueTween {
     }
     return PropertyValueHolderTween(
       holder.propertyName,
-      Interpolation(begin: holder.valueFrom ?? baseValue, end: holder.valueTo!),
+      Interpolation(
+        begin: holder.valueFrom ?? baseValue,
+        end: holder.valueTo!,
+        interpolator:
+            holder.interpolator?.resource ?? CurveInterpolator.easeInOut,
+      ),
     );
   }
 
   @override
-  _InterpolatedProperty lerp(double t) => _tween.lerp(t);
+  StyleResolvable<Object> lerp(double t) => _tween.lerp(t);
+
+  @override
+  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+    super.debugFillProperties(properties);
+    properties.add(DiagnosticsProperty('propertyName', propertyName));
+    properties.add(DiagnosticsProperty('_tween', _tween));
+  }
+}
+
+class _SingleStyleResolvable<T> extends StyleResolvable<T> with Diagnosticable {
+  final T value;
+
+  _SingleStyleResolvable(this.value);
+
+  @override
+  T resolve(StyleResolver resolver) => value;
 }
 
 abstract class ValueTween {
-  _InterpolatedProperty lerp(double t);
+  StyleResolvable<Object> lerp(double t);
 }
 
 class KeyframeGroup implements ValueTween {
   final List<double> keyframeFractions;
   final List<Object> keyframeValues;
-  final List<Curve> keyframeCurves;
+  final List<Interpolator> keyframeCurves;
 
   factory KeyframeGroup.from(
     List<Keyframe> keyframes,
@@ -763,8 +767,10 @@ class KeyframeGroup implements ValueTween {
             keyframeFractions[i],
           ),
     );
-    final keyframeCurves = List.generate(keyframes.length,
-        (i) => keyframes[i].interpolator?.resource?.curve ?? Curves.easeInOut);
+    final keyframeCurves = List.generate(
+        keyframes.length,
+        (i) =>
+            keyframes[i].interpolator?.resource ?? CurveInterpolator.easeInOut);
     return KeyframeGroup(keyframeFractions, keyframeValues, keyframeCurves);
   }
 
@@ -775,7 +781,7 @@ class KeyframeGroup implements ValueTween {
   );
 
   @override
-  _InterpolatedProperty lerp(
+  StyleResolvable<Object> lerp(
     double t,
   ) {
     for (var i = 0; i < keyframeFractions.length - 1; i++) {
@@ -794,8 +800,7 @@ class KeyframeGroup implements ValueTween {
         transformedT,
       );
     }
-    // TODO: single
-    return _InterpolatedProperty(keyframeValues.last, keyframeValues.last, 1);
+    return _SingleStyleResolvable(keyframeValues.last);
   }
 }
 
@@ -840,16 +845,16 @@ PathData lerpPathData(PathData a, PathData b, double t) {
 class Interpolation implements ValueTween {
   final Object begin;
   final Object end;
-  final Curve curve;
+  final Interpolator interpolator;
   Interpolation({
     required this.begin,
     required this.end,
-    this.curve = Curves.linear,
+    required this.interpolator,
   });
 
   @override
-  _InterpolatedProperty lerp(double t) =>
-      _InterpolatedProperty(begin, end, curve.transform(t));
+  StyleResolvable<Object> lerp(double t) =>
+      _InterpolatedProperty(begin, end, interpolator.transform(t));
 }
 
 class AnimatedVectorWidget extends StatefulWidget {
@@ -898,14 +903,43 @@ Map<String, VectorDrawableNode> _namedBaseVectorElements(
 class AnimatedVectorState extends State<AnimatedVectorWidget>
     with TickerProviderStateMixin
     implements Animator {
-  late final Vector base = widget.animatedVector.drawable.resource!.body;
-  late final Vector animatable;
+  AnimatedVector? _currentVector;
+  late Vector base;
+  late Vector animatable;
   final Map<VectorDrawableNode, Set<ObjectAnimator>> elementAnimators = {};
-  late final Map<String, VectorDrawableNode> namedBaseElements =
-      _namedBaseVectorElements(base);
+  late Map<String, VectorDrawableNode> namedBaseElements;
   // owns all other animators
-  late final AnimatorSet root;
-  Animator? _createTargetAnimator(Target target) {
+  late AnimatorSet root;
+  final Map<VectorDrawableNode, _StartOffsetAndThemableAttributes>
+      _nodePropsMap = {};
+  int startOffset = 0;
+  int propsLength = 0;
+  void _removeStuffFromOldVector() {
+    assert(_currentVector != null);
+    _nodePropsMap.clear();
+    startOffset = 0;
+    propsLength = 0;
+    elementAnimators.clear();
+    root.dispose();
+    _currentVector = null;
+  }
+
+  void _createStuffForVector(AnimatedVector vector) {
+    assert(_currentVector == null);
+    assert(elementAnimators.isEmpty);
+    assert(_nodePropsMap.isEmpty);
+    assert(startOffset == 0);
+    assert(propsLength == 0);
+    base = vector.drawable.resource!.body;
+    root = widget.animatedVector.children.isEmpty
+        ? EmptyAnimatorSet._()
+        : _createTargetAnimators(_namedBaseVectorElements(base));
+    animatable = _buildAnimatableVector();
+    _currentVector = vector;
+  }
+
+  Animator? _createTargetAnimator(
+      Map<String, VectorDrawableNode> namedBaseElements, Target target) {
     if (!namedBaseElements.containsKey(target.name)) {
       return null;
     }
@@ -932,19 +966,26 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
     return buildAnimator(anim.body);
   }
 
-  AnimatorSet _createTargetAnimators() =>
+  AnimatorSet _createTargetAnimators(
+          Map<String, VectorDrawableNode> namedBaseElements) =>
       TogetherAnimatorSet._(widget.animatedVector.children
-          .map(_createTargetAnimator)
+          .map((target) => _createTargetAnimator(namedBaseElements, target))
           .where((e) => e != null)
           .toList()
           .cast());
 
   void initState() {
     super.initState();
-    root = widget.animatedVector.children.isEmpty
-        ? EmptyAnimatorSet._()
-        : _createTargetAnimators();
-    animatable = _buildAnimatableVector();
+    _createStuffForVector(widget.animatedVector);
+  }
+
+  @override
+  void didUpdateWidget(AnimatedVectorWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.animatedVector != widget.animatedVector) {
+      _removeStuffFromOldVector();
+      _createStuffForVector(widget.animatedVector);
+    }
   }
 
   void dispose() {
@@ -965,6 +1006,105 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
         .toList();
   }
 
+  Iterable<StyleResolvable<Object>> _dynamicPropsFrom(
+    VectorDrawableNode node,
+    Set<ObjectAnimator> animators,
+    List<String> themableAttrs,
+  ) {
+    final props = {
+      for (final animator in animators) ...animator.values,
+    };
+    return themableAttrs.map(
+      (prop) =>
+          props[prop] ??
+          _SingleStyleResolvable(node.getThemeableAttribute(prop)!),
+    );
+  }
+
+  VectorDrawableNode buildAnimatableTargetFromProperties(
+    List<String> animatableProperties,
+    VectorDrawableNode target,
+    VectorDrawableNode Function(
+      VectorDrawableNode,
+    )
+        buildChild,
+  ) {
+    final targetStartOffset = startOffset;
+    if (animatableProperties.isNotEmpty) {
+      _nodePropsMap[target] = _StartOffsetAndThemableAttributes(
+          targetStartOffset, animatableProperties);
+    }
+    startOffset += animatableProperties.length;
+    propsLength += animatableProperties.length;
+
+    StyleOr<T>? prop<T>(StyleOr<T>? otherwise, String name) {
+      final i = animatableProperties.indexOf(name);
+      if (i == -1) {
+        return otherwise;
+      }
+      return StyleOr.style(
+        StyleProperty(AnimationStyleResolver.kNamespace,
+            (i + targetStartOffset).toString()),
+      );
+    }
+
+    final t = target;
+    if (t is Vector) {
+      return Vector(
+        name: t.name,
+        width: t.width,
+        height: t.height,
+        viewportWidth: t.viewportWidth,
+        viewportHeight: t.viewportHeight,
+        tint: t.tint,
+        tintMode: t.tintMode,
+        autoMirrored: t.autoMirrored,
+        opacity: prop(t.opacity, 'alpha')!,
+        children: t.children.map(buildChild).toList().cast(),
+      );
+    } else if (t is Group) {
+      return Group(
+        name: t.name,
+        rotation: prop(t.rotation, 'rotation'),
+        pivotX: prop(t.pivotX, 'pivotX'),
+        pivotY: prop(
+          t.pivotY,
+          'pivotY',
+        ),
+        scaleX: prop(
+          t.scaleX,
+          'scaleX',
+        ),
+        scaleY: prop(
+          t.scaleY,
+          'scaleY',
+        ),
+        translateX: prop(t.translateX, 'translateX'),
+        translateY: prop(t.translateY, 'translateY'),
+        children: t.children.map(buildChild).toList().cast(),
+      );
+    } else if (t is Path) {
+      return Path(
+        name: t.name,
+        pathData: prop(t.pathData, 'pathData')!,
+        fillColor: prop(t.fillColor, 'fillColor'),
+        strokeColor: prop(t.strokeColor, 'strokeColor'),
+        strokeWidth: prop(t.strokeWidth, 'strokeWidth')!,
+        strokeAlpha: prop(t.strokeAlpha, 'strokeAlpha')!,
+        fillAlpha: prop(t.fillAlpha, 'fillAlpha')!,
+        trimPathStart: prop(t.trimPathStart, 'trimPathStart')!,
+        trimPathEnd: prop(t.trimPathEnd, 'trimPathEnd')!,
+        trimPathOffset: prop(t.trimPathOffset, 'trimPathOffset')!,
+        strokeLineCap: t.strokeLineCap,
+        strokeLineJoin: t.strokeLineJoin,
+        strokeMiterLimit: t.strokeMiterLimit,
+        fillType: t.fillType,
+      );
+    } else {
+      throw UnimplementedError();
+    }
+  }
+
   VectorDrawableNode _buildNodeWithProperties(
     VectorDrawableNode node,
   ) {
@@ -975,32 +1115,30 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
     );
   }
 
-  Iterable<_InterpolatedProperty> _dynamicPropsFrom(
-    VectorDrawableNode node,
-    Set<ObjectAnimator> animators,
-  ) {
-    final animatableProps = _nodePropsMap[node]!.themableAttributes;
-    final props = {
-      for (final animator in animators) ...animator.values,
-    };
-    // TODO: single interpolated
-    return animatableProps.map(
-      (prop) =>
-          props[prop] ??
-          _InterpolatedProperty(node.getThemeableAttribute(prop)!,
-              node.getThemeableAttribute(prop)!, 1),
-    );
+  Vector _buildAnimatableVector() {
+    return _buildNodeWithProperties(base) as Vector;
   }
 
-  Vector _buildAnimatableVector() => _buildNodeWithProperties(base) as Vector;
-
-  AnimationStyleResolver _buildResolver(StyleMapping mapping) =>
-      AnimationStyleResolver(
-        mapping,
-        elementAnimators.entries
-            .expand((e) => _dynamicPropsFrom(e.key, e.value))
-            .toList(),
-      );
+  AnimationStyleResolver _buildDynamicStyleResolver(StyleMapping mapping) {
+    final props = List<StyleResolvable<Object>?>.filled(propsLength, null);
+    for (final e in elementAnimators.entries) {
+      final animationInfo = _nodePropsMap[e.key];
+      if (animationInfo == null) {
+        continue;
+      }
+      final elementProps =
+          _dynamicPropsFrom(e.key, e.value, animationInfo.themableAttributes);
+      var i = 0;
+      for (final prop in elementProps) {
+        props[i + animationInfo.startOffset] = prop;
+        i++;
+      }
+    }
+    return AnimationStyleResolver(
+      mapping,
+      props.cast(),
+    );
+  }
 
   Widget _buildVectorWidget(BuildContext context, StyleResolver resolver) {
     return RawVectorWidget(
@@ -1017,7 +1155,7 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
       animation: changes,
       builder: (context, _) => _buildVectorWidget(
         context,
-        _buildResolver(styleMapping),
+        _buildDynamicStyleResolver(styleMapping),
       ),
     );
   }
