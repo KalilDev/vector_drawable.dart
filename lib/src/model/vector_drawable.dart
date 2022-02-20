@@ -27,7 +27,7 @@ class VectorDrawable extends Resource {
   VectorDrawable(this.body, ResourceReference? source) : super(source);
   static VectorDrawable parseDocument(
           XmlDocument document, ResourceReference source) =>
-      parseVectorDrawable(document, source);
+      parseVectorDrawable(document.rootElement, source);
   static VectorDrawable parseElement(XmlElement element) =>
       parseVectorDrawable(element, null);
 }
@@ -86,8 +86,12 @@ class Vector extends VectorDrawableNode with DiagnosticableTreeMixin {
     properties.add(DiagnosticsProperty('tint', tint));
     properties
         .add(EnumProperty('tintMode', tintMode, defaultValue: BlendMode.srcIn));
-    properties.add(
-        FlagProperty('autoMirrored', value: autoMirrored, defaultValue: false));
+    properties.add(FlagProperty(
+      'autoMirrored',
+      value: autoMirrored,
+      defaultValue: false,
+      ifTrue: 'mirrored on rtl',
+    ));
     properties.add(DiagnosticsProperty('opacity', opacity, defaultValue: 1.0));
   }
 
@@ -100,6 +104,24 @@ class Vector extends VectorDrawableNode with DiagnosticableTreeMixin {
         if (tint?.styled != null) tint!.styled!,
         if (opacity.styled != null) opacity.styled!,
       ];
+}
+
+void _copySegmentInto(PathSegmentData source, PathSegmentData target) => target
+  ..command = source.command
+  ..targetPoint = source.targetPoint
+  ..point1 = source.point1
+  ..point2 = source.point2
+  ..arcSweep = source.arcSweep
+  ..arcLarge = source.arcLarge;
+
+final mutableSegment = PathSegmentData();
+void emitSegmentWithoutMutation(
+  PathSegmentData segment,
+  PathProxy path,
+  SvgPathNormalizer normalizer,
+) {
+  _copySegmentInto(segment, mutableSegment);
+  normalizer.emitSegment(mutableSegment, path);
 }
 
 class PathData {
@@ -134,6 +156,121 @@ class PathData {
       UnmodifiableListView(_segments ??= _parse(_asString!));
 
   String get asString => _asString ??= _toString(segments);
+
+  _PathCubicWriter? _finishedComputer;
+
+  Offset evaluateAt(double t) {
+    if (_finishedComputer == null) {
+      final computer = _PathCubicWriter();
+      final normalizer = SvgPathNormalizer();
+      for (final seg in segments) {
+        emitSegmentWithoutMutation(seg, computer, normalizer);
+      }
+      _finishedComputer = computer;
+    }
+    return _finishedComputer!.eval(t);
+  }
+}
+
+class _StandaloneCubic {
+  final Offset p0;
+  final Offset p1;
+  final Offset p2;
+  final Offset p3;
+
+  _StandaloneCubic(
+    this.p0,
+    this.p1,
+    this.p2,
+    this.p3,
+  );
+  Offset eval(double t) {
+    final p0ToP1 = p1 - p0;
+    final p1ToP2 = p2 - p1;
+    final p2ToP3 = p3 - p2;
+    return p0 + (p0ToP1 * t) + (p1ToP2 * t) + (p2ToP3 * t);
+  }
+
+  double _computeWeigth() {
+    final p0ToP1 = p1 - p0;
+    final p1ToP2 = p2 - p1;
+    final p2ToP3 = p3 - p2;
+    return p0ToP1.distanceSquared +
+        p1ToP2.distanceSquared +
+        p2ToP3.distanceSquared;
+  }
+
+  late final double approximateWeigth = _computeWeigth();
+}
+
+class _PathCubicWriter extends PathProxy {
+  final List<_StandaloneCubic> _cubics = [];
+  Offset _current = Offset.zero;
+  Offset _start = Offset.zero;
+
+  _PathCubicWriter();
+
+  @override
+  void close() {
+    if (_current == _start) {
+      return;
+    }
+    lineTo(_start.dx, _start.dy);
+  }
+
+  @override
+  void cubicTo(
+    double x1,
+    double y1,
+    double x2,
+    double y2,
+    double x3,
+    double y3,
+  ) {
+    final p0 = _current;
+    final p1 = Offset(x1, y1);
+    final p2 = Offset(x2, y2);
+    final p3 = Offset(x3, y3);
+    _current = p3;
+    _cubics.add(_StandaloneCubic(p0, p1, p2, p3));
+  }
+
+  @override
+  void lineTo(double x, double y) {
+    final p0 = _current;
+    final p3 = Offset(x, y);
+    final p0ToP3 = p3 - p0;
+    final p1 = p0 + (p0ToP3 * (1 / 3));
+    final p2 = p0 + (p0ToP3 * (2 / 3));
+    _cubics.add(_StandaloneCubic(p0, p1, p2, p3));
+  }
+
+  @override
+  void moveTo(double x, double y) => _start = _current = Offset(x, y);
+
+  late final totalWeigth = _cubics.fold<double>(
+    0.0,
+    (acc, e) => acc + e.approximateWeigth,
+  );
+
+  Offset eval(double t) {
+    if (_cubics.isEmpty) {
+      return Offset.zero;
+    }
+    final targetWeigthPoint = t * totalWeigth;
+    var currentAccumullatedWeigth = 0.0;
+    for (final cubic in _cubics) {
+      if (currentAccumullatedWeigth + cubic.approximateWeigth <
+          targetWeigthPoint) {
+        currentAccumullatedWeigth += cubic.approximateWeigth;
+        continue;
+      }
+      final t = (targetWeigthPoint - currentAccumullatedWeigth) /
+          cubic.approximateWeigth;
+      return cubic.eval(t);
+    }
+    return _cubics.last.p3;
+  }
 }
 
 class Group extends VectorPart with DiagnosticableTreeMixin {

@@ -1,14 +1,18 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:vector_drawable/vector_drawable.dart';
 import 'package:xml/xml.dart';
 import 'package:path_parsing/path_parsing.dart';
 
 import '../parsing/animation.dart';
+import '../parsing/interpolator.dart';
 import 'animated_vector_drawable.dart';
 import 'resource.dart';
+import 'vector_drawable.dart';
 
 //https://developer.android.com/guide/topics/resources/animation-resource
-class AnimationResource extends Resource {
+class AnimationResource extends Resource
+    implements Clonable<AnimationResource> {
   final AnimationNode body;
 
   AnimationResource(this.body, ResourceReference? source) : super(source);
@@ -18,9 +22,19 @@ class AnimationResource extends Resource {
       parseAnimationResource(document.rootElement, source);
   static AnimationResource parseElement(XmlElement document) =>
       parseAnimationResource(document, null);
+
+  @override
+  AnimationResource clone() =>
+      AnimationResource(AnimationNode.cloneNode(body), source);
 }
 
-abstract class AnimationNode implements Diagnosticable {}
+abstract class AnimationNode implements Diagnosticable {
+  static AnimationNode cloneNode(AnimationNode node) => node is AnimationSet
+      ? node.clone()
+      : node is ObjectAnimation
+          ? node.clone()
+          : (throw TypeError()) as AnimationNode;
+}
 
 /// Name of the property being animated.
 enum AnimationOrdering {
@@ -31,7 +45,9 @@ enum AnimationOrdering {
   sequentially,
 }
 
-class AnimationSet extends AnimationNode with DiagnosticableTreeMixin {
+class AnimationSet extends AnimationNode
+    with DiagnosticableTreeMixin
+    implements Clonable<AnimationSet> {
   final AnimationOrdering ordering;
   final List<AnimationNode> children;
 
@@ -43,6 +59,10 @@ class AnimationSet extends AnimationNode with DiagnosticableTreeMixin {
     properties.add(EnumProperty('ordering', ordering,
         defaultValue: AnimationOrdering.together));
   }
+
+  @override
+  AnimationSet clone() =>
+      AnimationSet(ordering, children.map(AnimationNode.cloneNode).toList());
 }
 
 enum RepeatMode {
@@ -62,11 +82,14 @@ enum ValueType {
   intType,
 }
 
-class PropertyValuesHolder with Diagnosticable {
+class PropertyValuesHolder
+    with Diagnosticable
+    implements Clonable<PropertyValuesHolder> {
   final ValueType valueType;
   final String propertyName;
   final Object? valueFrom;
   final Object? valueTo;
+  final ResourceOrReference<Interpolator>? interpolator;
   final List<Keyframe>? keyframes;
 
   PropertyValuesHolder({
@@ -74,6 +97,7 @@ class PropertyValuesHolder with Diagnosticable {
     required this.propertyName,
     this.valueFrom,
     this.valueTo,
+    this.interpolator,
     this.keyframes,
   }) : assert((keyframes != null) ^ (valueTo != null));
 
@@ -87,10 +111,21 @@ class PropertyValuesHolder with Diagnosticable {
         ifNull: 'interpolated from drawable'));
     properties.add(DiagnosticsProperty('valueTo', valueTo,
         ifNull: 'interpolated from drawable'));
+    properties.add(DiagnosticsProperty('interpolator', interpolator));
   }
+
+  @override
+  PropertyValuesHolder clone() => PropertyValuesHolder(
+        valueType: valueType,
+        propertyName: propertyName,
+        valueFrom: valueFrom,
+        valueTo: valueTo,
+        interpolator: interpolator?.clone(),
+        keyframes: keyframes?.map(cloneAn).toList(),
+      );
 }
 
-class Keyframe with Diagnosticable {
+class Keyframe with Diagnosticable implements Clonable<Keyframe> {
   final ValueType valueType;
   final Object? value;
   final double? fraction;
@@ -112,53 +147,78 @@ class Keyframe with Diagnosticable {
     properties.add(
         DiagnosticsProperty('interpolator', interpolator, missingIfNull: true));
   }
+
+  @override
+  Keyframe clone() => Keyframe(
+        valueType: valueType,
+        value: value,
+        fraction: fraction,
+        interpolator: interpolator?.clone(),
+      );
 }
 
-class Interpolator extends Resource {
-  Interpolator(ResourceReference? source, String curveName) : super(source);
-  final Curve curve = Curves.linear;
+class PathInterpolator extends Interpolator {
+  final PathData pathData;
+  PathInterpolator({
+    required this.pathData,
+    ResourceReference? source,
+  }) : super(source);
+
+  @override
+  double transform(double t) => pathData.evaluateAt(t).dy;
 }
 
-/// ValueAnimator class attributes
-class Animation extends AnimationNode with Diagnosticable {
-  /// Amount of time (in milliseconds) for the animation to run.
-  final int duration;
+class CurveInterpolator extends Interpolator {
+  final Curve curve;
+  CurveInterpolator({
+    required this.curve,
+    ResourceReference? source,
+  }) : super(source);
 
-  final Object valueFrom;
-  final Object valueTo;
+  static final linear = CurveInterpolator(
+      curve: Curves.linear,
+      source: ResourceReference('anim', 'linear', 'android'));
+  static final easeInOut = CurveInterpolator(
+      curve: Curves.easeInOut,
+      source: ResourceReference('anim', 'accelerate_interpolator', 'android'));
+  static final accelerateCubic = CurveInterpolator(
+      curve: Curves.easeInCubic,
+      source: ResourceReference('interpolator', 'accelerate_cubic', 'android'));
+  static final decelerateCubic = CurveInterpolator(
+      curve: Curves.easeOutCubic,
+      source: ResourceReference('interpolator', 'decelerate_cubic', 'android'));
 
-  /// Delay in milliseconds before the animation runs, once start time is reached.
-  final int startOffset;
+  @override
+  double transform(double t) => curve.transform(t);
+}
 
-  /// Defines how many times the animation should repeat. The default value is 0.
-  final int repeatCount;
-
-  /// Defines the animation behavior when it reaches the end and the repeat count is
-  /// greater than 0 or infinite. The default value is restart.
-  final RepeatMode repeatMode;
-  final ValueType valueType;
-
-  Animation({
-    this.duration = 300,
-    required this.valueFrom,
-    required this.valueTo,
-    this.startOffset = 0,
-    this.repeatCount = 0,
-    this.repeatMode = RepeatMode.repeat,
-    this.valueType = ValueType.floatType,
-  });
+abstract class Interpolator extends Resource {
+  Interpolator(ResourceReference? source) : super(source);
+  factory Interpolator.parseDocument(
+          XmlDocument element, ResourceReference source) =>
+      parseInterpolatorElement(element.rootElement, source);
+  factory Interpolator.parseElement(XmlElement element) =>
+      parseInterpolatorElement(element, null);
+  double transform(double t);
 }
 
 /// ObjectAnimator class attributes
-class ObjectAnimation extends AnimationNode with DiagnosticableTreeMixin {
+class ObjectAnimation extends AnimationNode
+    with DiagnosticableTreeMixin
+    implements Clonable<ObjectAnimation> {
   /// Name of the property being animated.
   final String? propertyName;
+
+  final String? propertyXName;
+  final String? propertyYName;
+  final StyleOr<PathData>? pathData;
 
   /// Amount of time (in milliseconds) for the animation to run.
   final int duration;
 
-  Object? valueFrom;
-  Object? valueTo;
+  StyleOr<Object>? valueFrom;
+  StyleOr<Object>? valueTo;
+  ResourceOrReference<Interpolator>? interpolator;
 
   /// Delay in milliseconds before the animation runs, once start time is reached.
   final int startOffset;
@@ -174,16 +234,20 @@ class ObjectAnimation extends AnimationNode with DiagnosticableTreeMixin {
   final List<PropertyValuesHolder>? valueHolders;
 
   ObjectAnimation({
-    required this.propertyName,
+    this.propertyName,
+    this.propertyXName,
+    this.propertyYName,
+    this.pathData,
     this.duration = 300,
     this.valueFrom,
     this.valueTo,
+    this.interpolator,
     this.startOffset = 0,
     this.repeatCount = 0,
     this.repeatMode = RepeatMode.repeat,
     this.valueType = ValueType.floatType,
     this.valueHolders,
-  }) : assert((valueHolders != null) ^ (valueTo != null));
+  }) : assert((valueHolders != null) ^ (valueTo != null || pathData != null));
   @override
   List<DiagnosticsNode> debugDescribeChildren() => valueHolders == null
       ? []
@@ -193,9 +257,13 @@ class ObjectAnimation extends AnimationNode with DiagnosticableTreeMixin {
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
     properties.add(DiagnosticsProperty('propertyName', propertyName));
+    properties.add(DiagnosticsProperty('propertyXName', propertyXName));
+    properties.add(DiagnosticsProperty('propertyYName', propertyYName));
+    properties.add(DiagnosticsProperty('pathData', pathData));
     properties.add(DiagnosticsProperty('duration', duration));
     properties.add(DiagnosticsProperty('valueFrom', valueFrom));
     properties.add(DiagnosticsProperty('valueTo', valueTo));
+    properties.add(DiagnosticsProperty('interpolator', interpolator));
     properties
         .add(DiagnosticsProperty('startOffset', startOffset, defaultValue: 0));
     properties
@@ -205,4 +273,21 @@ class ObjectAnimation extends AnimationNode with DiagnosticableTreeMixin {
     properties.add(EnumProperty('valueType', valueType,
         defaultValue: ValueType.floatType));
   }
+
+  @override
+  ObjectAnimation clone() => ObjectAnimation(
+        propertyName: propertyName,
+        propertyXName: propertyXName,
+        propertyYName: propertyYName,
+        pathData: pathData,
+        duration: duration,
+        valueFrom: valueFrom,
+        valueTo: valueTo,
+        interpolator: interpolator?.clone(),
+        startOffset: startOffset,
+        repeatCount: repeatCount,
+        repeatMode: repeatMode,
+        valueType: valueType,
+        valueHolders: valueHolders?.map(cloneAn).toList(),
+      );
 }

@@ -1,13 +1,15 @@
+import 'package:flutter/foundation.dart';
+
 abstract class StyleResolver {
   bool containsAny(covariant Iterable<StyleProperty> props);
   T? resolve<T>(StyleProperty property);
 }
 
-abstract class StyleResolvable<T> {
+abstract class StyleResolvable<T> implements Diagnosticable {
   T? resolve(StyleResolver resolver);
 }
 
-class StyleOr<T> implements StyleResolvable<T> {
+class StyleOr<T> with Diagnosticable implements StyleResolvable<T> {
   final T? value;
   final StyleProperty? styled;
 

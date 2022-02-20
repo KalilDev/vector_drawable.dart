@@ -1,7 +1,14 @@
 import 'package:xml/xml.dart';
 import 'package:xml/src/xml/utils/namespace.dart';
 
+abstract class Clonable<Self> {
+  Self clone();
+}
+
+T cloneAn<T extends Clonable<T>>(Clonable<T> clonable) => clonable.clone();
+
 class ResourceReference {
+  final String namespace;
   final String folder;
   final String name;
 
@@ -10,13 +17,23 @@ class ResourceReference {
     if (!ref.startsWith('@') || split.length != 2) {
       return null;
     }
-    return ResourceReference(split[0].substring(1), split[1]);
+    final namespaceAndFolder = split[0].substring(1).split(':');
+
+    return ResourceReference(
+      namespaceAndFolder[namespaceAndFolder.length - 1],
+      split[1],
+      namespaceAndFolder.length == 1 ? '' : namespaceAndFolder[0],
+    );
   }
 
   ResourceReference(
     this.folder,
-    this.name,
-  );
+    this.name, [
+    this.namespace = '',
+  ]);
+
+  @override
+  String toString() => '@${namespace == '' ? '' : '$namespace:'}$folder/$name';
 }
 
 abstract class Resource {
@@ -27,7 +44,8 @@ abstract class Resource {
   bool get isInline => source == null;
 }
 
-class ResourceOrReference<T extends Resource> {
+class ResourceOrReference<T extends Resource>
+    implements Clonable<ResourceOrReference<T>> {
   ResourceOrReference.empty() : reference = null;
   ResourceOrReference.reference(this.reference);
   ResourceOrReference.resource(this.resource) : reference = null;
@@ -48,4 +66,12 @@ class ResourceOrReference<T extends Resource> {
     }
     return ResourceOrReference.reference(reference);
   }
+
+  R runWithResourceType<R>(
+    R Function<T extends Resource>(ResourceOrReference<T> self) fn,
+  ) =>
+      fn<T>(this);
+
+  @override
+  ResourceOrReference<T> clone() => ResourceOrReference(reference, resource);
 }
