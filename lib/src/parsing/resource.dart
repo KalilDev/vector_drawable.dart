@@ -24,7 +24,7 @@ ResourceOrReference<T>? _parseInlineResource<T extends Resource>(
           (e) =>
               _isAaptAttr(e!.name) && e.getAttribute('name') == qualifiedName,
           orElse: () => null)
-      ?.map(parse)
+      ?.map((e) => parse(e.childElements.single))
       .map(ResourceOrReference.resource);
 }
 
