@@ -1,7 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide ClipPath;
 import 'package:flutter/rendering.dart';
 import '../model/style.dart';
 import '../model/vector_drawable.dart';
@@ -647,10 +647,10 @@ class RenderVector extends RenderBox {
     }
   }
 
-  static ui.Path _uiPathForPath(_PathValues path) {
+  static ui.Path _uiPathForPath(PathData pathData) {
     final normalizer = SvgPathNormalizer();
     final creator = _UiPathBuilderProxy();
-    for (final segment in path.pathData.segments) {
+    for (final segment in pathData.segments) {
       emitSegmentWithoutMutation(segment, creator, normalizer);
     }
     return creator.path;
@@ -685,6 +685,14 @@ class RenderVector extends RenderBox {
         break;
     }
     return paint;
+  }
+
+  // According to https://github.com/aosp-mirror/platform_frameworks_base/blob/47fed6ba6ab8a68267a9b3ac6cb9decd4ba122ed/libs/hwui/VectorDrawable.cpp#L264
+  // there is no save layer and restore layer.
+  void _paintClipPath(Canvas canvas, ClipPath path) {
+    final uiPath = _uiPathForPath(path.pathData.resolve(styleMapping)!);
+    canvas.clipPath(uiPath);
+    _paintChildren(canvas, path.children);
   }
 
   void _paintPath(Canvas canvas, Path path) {
@@ -730,7 +738,7 @@ class RenderVector extends RenderBox {
       return;
     }
     final paint = _paintForPath(path, values);
-    final uiPath = _uiPathForPath(values);
+    final uiPath = _uiPathForPath(values.pathData);
     if (values.fillColor != null) {
       paint
         ..color = values.fillColor?.withOpacity(values.fillAlpha) ??
@@ -753,6 +761,8 @@ class RenderVector extends RenderBox {
         _paintGroup(canvas, child);
       } else if (child is Path) {
         _paintPath(canvas, child);
+      } else if (child is ClipPath) {
+        _paintClipPath(canvas, child);
       } else {
         throw TypeError();
       }

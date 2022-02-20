@@ -59,6 +59,7 @@ R _walkVectorPart<R>(
   VectorPart part, {
   required R Function(Path) onPath,
   required R Function(Group) onGroup,
+  required R Function(ClipPath) onClipPath,
   required R Function(R, R) reducer,
 }) =>
     part is Path
@@ -71,16 +72,30 @@ R _walkVectorPart<R>(
                           part,
                           onPath: onPath,
                           onGroup: onGroup,
+                          onClipPath: onClipPath,
                           reducer: reducer,
                         ))
                     .reduce(reducer))
-            : throw TypeError();
+            : part is ClipPath
+                ? reducer(
+                    onClipPath(part),
+                    part.children
+                        .map((e) => _walkVectorPart(
+                              part,
+                              onPath: onPath,
+                              onGroup: onGroup,
+                              onClipPath: onClipPath,
+                              reducer: reducer,
+                            ))
+                        .reduce(reducer))
+                : throw TypeError();
 R walkVectorDrawable<R>(
   VectorDrawable vector, {
   required R Function(VectorDrawable) onVectorDrawable,
   required R Function(Vector) onVector,
   required R Function(Path) onPath,
   required R Function(Group) onGroup,
+  required R Function(ClipPath) onClipPath,
   required R Function(R, R) reducer,
 }) =>
     reducer(
@@ -92,6 +107,7 @@ R walkVectorDrawable<R>(
                     part,
                     onPath: onPath,
                     onGroup: onGroup,
+                    onClipPath: onClipPath,
                     reducer: reducer,
                   ))
               .reduce(reducer),
@@ -129,6 +145,7 @@ Iterable<ResourceOrReference> findAllUnresolvedReferencesInVectorDrawable(
       onVector: _empty,
       onPath: _empty,
       onGroup: _empty,
+      onClipPath: _empty,
       reducer: (a, b) => a.followedBy(b),
     );
 Iterable<ResourceOrReference> findAllUnresolvedReferencesInAnimationResource(

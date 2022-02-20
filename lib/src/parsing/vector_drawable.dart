@@ -1,6 +1,6 @@
 import 'dart:collection';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide ClipPath;
 import 'package:vector_drawable/src/parsing/style.dart';
 import 'package:xml/xml.dart';
 import 'package:path_parsing/path_parsing.dart';
@@ -60,6 +60,22 @@ Group? _parseGroup(XmlElement node) {
         node.getStyleOrAndroidAttribute('translateX', parse: double.parse),
     translateY:
         node.getStyleOrAndroidAttribute('translateY', parse: double.parse),
+    children: node.childElements
+        .map(_parseVectorPart)
+        .whereType<VectorPart>()
+        .toList(),
+  );
+}
+
+ClipPath? _parseClipPath(XmlElement node) {
+  if (node.name.qualified != 'clip-path') {
+    throw ParseException(node, 'is not clip-path');
+  }
+
+  return ClipPath(
+    name: node.getAndroidAttribute('name'),
+    pathData: node.getStyleOrAndroidAttribute('pathData',
+        parse: PathData.fromString)!,
     children: node.childElements
         .map(_parseVectorPart)
         .whereType<VectorPart>()
@@ -134,6 +150,8 @@ VectorPart? _parseVectorPart(XmlElement node) {
       return _parseGroup(node);
     case 'path':
       return _parsePath(node);
+    case 'clip-path':
+      return _parseClipPath(node);
     default:
       return null;
   }

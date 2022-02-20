@@ -325,6 +325,22 @@ class CodegenVectorDrawableVisitor extends VectorDrawableVisitor<StringBuffer>
   }
 
   @override
+  StringBuffer visitClipPath(ClipPath node, [StringBuffer? context]) {
+    context ??= StringBuffer();
+    context.write('ClipPath(');
+    _writeNamedOrNull('name', context, node.name, _visitString);
+    _writeNamed('pathData', context, node.pathData, _visitStyleOrStringify);
+    context.write('children: [');
+    for (final child in node.children) {
+      visitVectorPart(child, context);
+      context.write(', ');
+    }
+    context.write('],');
+    context.write(')');
+    return context;
+  }
+
+  @override
   StringBuffer visitGroup(Group node, [StringBuffer? context]) {
     context ??= StringBuffer();
     context.write('Group(');
@@ -397,6 +413,8 @@ class CodegenVectorDrawableVisitor extends VectorDrawableVisitor<StringBuffer>
       visitGroup(node, context);
     } else if (node is Path) {
       visitPath(node, context);
+    } else if (node is ClipPath) {
+      visitClipPath(node, context);
     } else {
       throw UnimplementedError();
     }

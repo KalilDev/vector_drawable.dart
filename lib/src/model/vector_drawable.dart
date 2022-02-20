@@ -273,6 +273,35 @@ class _PathCubicWriter extends PathProxy {
   }
 }
 
+class ClipPath extends VectorPart with DiagnosticableTreeMixin {
+  final StyleOr<PathData> pathData;
+  final List<VectorPart> children;
+
+  ClipPath({
+    String? name,
+    required this.pathData,
+    required this.children,
+  }) : super(name: name);
+
+  @override
+  Iterable<StyleProperty> get _usedStyles =>
+      _localUsedStyles.followedBy(children.expand((e) => e._usedStyles));
+  @override
+  Iterable<StyleProperty> get _localUsedStyles => [
+        if (pathData.styled != null) pathData.styled!,
+      ];
+
+  @override
+  List<DiagnosticsNode> debugDescribeChildren() =>
+      children.map((e) => e.toDiagnosticsNode()).toList();
+
+  @override
+  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+    super.debugFillProperties(properties);
+    properties.add(DiagnosticsProperty('pathData', pathData));
+  }
+}
+
 class Group extends VectorPart with DiagnosticableTreeMixin {
   final StyleOr<double>? rotation;
   final StyleOr<double>? pivotX;

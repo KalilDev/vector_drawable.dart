@@ -17,6 +17,7 @@ abstract class VectorDrawableVisitor<T>
   T visitVectorPart(VectorPart node, [T? context]);
   T visitGroup(Group node, [T? context]);
   T visitPath(Path node, [T? context]);
+  T visitClipPath(ClipPath node, [T? context]);
 }
 
 abstract class AnimationResourceVisitor<T>
@@ -24,9 +25,9 @@ abstract class AnimationResourceVisitor<T>
   T visitAnimationResource(AnimationResource node, [T? context]);
   T visitAnimationNode(AnimationNode node, [T? context]);
   T visitAnimationSet(AnimationSet node, [T? context]);
-  T visitAnimation(Animation node, [T? context]);
   T visitObjectAnimation(ObjectAnimation node, [T? context]);
   T visitPropertyValuesHolder(PropertyValuesHolder node, [T? context]);
+  T visitInterpolator(Interpolator node, [T? context]);
 }
 
 abstract class AnimatedVectorDrawableVisitor<T>

@@ -1,8 +1,8 @@
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart' hide Animation;
-import 'package:flutter/material.dart' as flt show Animation;
+import 'package:flutter/material.dart' hide Animation, ClipPath;
+import 'package:flutter/material.dart' as flt show Animation, ClipPath;
 import 'package:vector_drawable/src/model/style.dart';
 import '../model/vector_drawable.dart';
 import 'vector.dart';
@@ -34,7 +34,8 @@ const _kThemableAttributes = {
   'trimPathStart',
   'trimPathEnd',
   'trimPathOffset',
-// TODO: clip path
+  // <clip-path>
+  //'pathData',
 };
 
 class _StartOffsetAndThemableAttributes {
@@ -78,6 +79,15 @@ extension on Path {
   }
 }
 
+extension on ClipPath {
+  Object? getThemeableAttribute(String name) {
+    switch (name) {
+      case 'pathData':
+        return pathData;
+    }
+  }
+}
+
 extension on Group {
   Object? getThemeableAttribute(String name) {
     switch (name) {
@@ -107,6 +117,8 @@ extension on VectorDrawableNode {
       return (this as Path).getThemeableAttribute(name);
     } else if (this is Vector) {
       return (this as Vector).getThemeableAttribute(name);
+    } else if (this is ClipPath) {
+      return (this as ClipPath).getThemeableAttribute(name);
     }
   }
 }
@@ -894,6 +906,13 @@ Map<String, VectorDrawableNode> _namedBaseVectorElements(
         node.name!: node,
     }, (acc, map) => acc..addAll(map));
   }
+  if (node is ClipPath) {
+    return node.children.map(_namedBaseVectorElements).fold({
+      if (node.name != null) node.name!: node,
+      for (final node in node.children.where((child) => child.name != null))
+        node.name!: node,
+    }, (acc, map) => acc..addAll(map));
+  }
   // TODO: clip path
   return {
     if (node.name != null) node.name!: node,
@@ -1099,6 +1118,12 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
         strokeLineJoin: t.strokeLineJoin,
         strokeMiterLimit: t.strokeMiterLimit,
         fillType: t.fillType,
+      );
+    } else if (t is ClipPath) {
+      return ClipPath(
+        name: t.name,
+        pathData: prop(t.pathData, 'pathData')!,
+        children: t.children.map(buildChild).toList().cast(),
       );
     } else {
       throw UnimplementedError();
