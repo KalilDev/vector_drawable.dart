@@ -27,44 +27,11 @@ class CodegenAnimationResourceVisitor
     return context;
   }
 
-  StringBuffer _visitValue(Object node, StringBuffer context) {
-    if (node is PathData) {
-      _visitPathData(node, context);
-    } else if (node is StyleOr<Object>) {
-      _visitStyleOr<Object>(node, context, _visitValue);
-    } else {
-      // double, num and Color
-      _visitStringify(node, context);
-    }
-    return context;
-  }
-
-  @override
-  StringBuffer visitAnimation(Animation node, [StringBuffer? context]) {
-    context ??= StringBuffer();
-    context.write('Animation(');
-    _maybeWriteNamed('duration', context, node.duration, 300, _visitStringify);
-    _writeNamed('valueFrom', context, node.valueFrom, _visitValue);
-    _writeNamed('valueTo', context, node.valueTo, _visitValue);
-    _maybeWriteNamed(
-        'startOffset', context, node.startOffset, 0, _visitStringify);
-    _maybeWriteNamed(
-        'repeatCount', context, node.repeatCount, 0, _visitStringify);
-    _maybeWriteNamed('repeatMode', context, node.repeatMode, RepeatMode.repeat,
-        _visitStringify);
-    _maybeWriteNamed('valueType', context, node.valueType, ValueType.floatType,
-        _visitStringify);
-    context.write(')');
-    return context;
-  }
-
   @override
   StringBuffer visitAnimationNode(AnimationNode node, [StringBuffer? context]) {
     context ??= StringBuffer();
     if (node is AnimationSet) {
       visitAnimationSet(node, context);
-    } else if (node is Animation) {
-      visitAnimation(node, context);
     } else if (node is ObjectAnimation) {
       visitObjectAnimation(node, context);
     }
@@ -88,9 +55,22 @@ class CodegenAnimationResourceVisitor
   }
 
   @override
+  StringBuffer visitInterpolator(Interpolator node, [StringBuffer? context]) {
+    context ??= StringBuffer();
+    context.write('Interpolator(');
+
+    context.write(')');
+    return context;
+  }
+
+  @override
   StringBuffer visitResource<R extends Resource>(R node,
       [StringBuffer? context]) {
     context ??= StringBuffer();
+    switch (R) {
+      case Interpolator:
+        return visitInterpolator(node as Interpolator, context);
+    }
     throw UnimplementedError();
     return context;
   }
@@ -140,12 +120,23 @@ class CodegenAnimationResourceVisitor
       [StringBuffer? context]) {
     context ??= StringBuffer();
     context.write('ObjectAnimation(');
+    if (node.pathData != null) {
+      _maybeWriteNamedNN(
+          'pathData', context, node.pathData, _visitStyleOrValue);
+      _maybeWriteNamedNN(
+          'propertyXName', context, node.propertyXName, _visitString);
+      _maybeWriteNamedNN(
+          'propertyYName', context, node.propertyYName, _visitString);
+    }
     _maybeWriteNamedNN(
         'propertyName', context, node.propertyName, _visitString);
     _maybeWriteNamed('duration', context, node.duration, 300, _visitStringify);
-    if (node.valueHolders == null) {
-      _maybeWriteNamedNN('valueFrom', context, node.valueFrom, _visitValue);
-      _writeNamed('valueTo', context, node.valueTo!, _visitValue);
+    _maybeWriteNamedNN<ResourceOrReference<Interpolator>>(
+        'interpolator', context, node.interpolator, visitResourceOrReference);
+    if (node.valueHolders == null && node.pathData == null) {
+      _maybeWriteNamedNN(
+          'valueFrom', context, node.valueFrom, _visitStyleOrValue);
+      _writeNamed('valueTo', context, node.valueTo!, _visitStyleOrValue);
     }
     _maybeWriteNamed('startOffset', context, node.duration, 0, _visitStringify);
     _maybeWriteNamed('repeatCount', context, node.duration, 0, _visitStringify);
@@ -225,6 +216,27 @@ StringBuffer _visitStringify(Object v, StringBuffer context) {
   return context;
 }
 
+StringBuffer _visitValue(Object node, StringBuffer context) {
+  if (node is PathData) {
+    _visitPathData(node, context);
+  } else if (node is StyleOr<Object>) {
+    _visitStyleOr<Object>(node, context, _visitValue);
+  } else {
+    // double, num and Color
+    _visitStringify(node, context);
+  }
+  return context;
+}
+
+StringBuffer _visitStyleOrValue(
+  StyleOr<Object> node,
+  StringBuffer context,
+) =>
+    _visitStyleOr(
+      node,
+      context,
+      _visitValue,
+    );
 StringBuffer _visitStyleOrPathData(
   StyleOr<PathData> node,
   StringBuffer context,
