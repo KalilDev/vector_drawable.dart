@@ -176,10 +176,20 @@ class _FileWidgetState extends State<_FileWidget> {
         ),
         child: Column(
           children: [
-            widget.file.unwrap.relativeFile
-                .map((rel) =>
-                    Text(rel.path, style: context.textTheme.titleLarge))
-                .build(),
+            Row(
+              children: [
+                Expanded(
+                  child: widget.file.unwrap.relativeFile
+                      .map((rel) =>
+                          Text(rel.path, style: context.textTheme.titleLarge))
+                      .build(),
+                ),
+                IconButton(
+                  onPressed: widget.file.unwrap.onDelete,
+                  icon: Icon(Icons.delete_outline),
+                )
+              ],
+            ),
             Text(widget.file.unwrap.ref.toString(),
                 style: context.textTheme.titleSmall),
             _HorizontalCenter(
@@ -322,6 +332,7 @@ class FileController
   ValueListenable<void> get wasDeleted => _wasDeleted.view();
   late final setResolver = _resolver.setter;
   late final setRoot = _root.setter;
+  late final onDelete = _wasDeleted.notify;
 
   void init() {
     super.init();
@@ -472,7 +483,7 @@ class ResourceController extends ControllerBase<ResourceController> {
   }
 
   void _registerFileController(FileController file) {
-    file.wasDeleted.listen(() => _avdFiles.removeChild(file));
+    file.wasDeleted.listen(() => _avdFiles.remove(file));
     resolver.connect(file.setResolver);
     rootDir.connect(file.setRoot);
   }
