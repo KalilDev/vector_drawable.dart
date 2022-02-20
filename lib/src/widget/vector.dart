@@ -408,21 +408,22 @@ class _PathValues {
   final double strokeWidth;
   final double strokeAlpha;
   final double fillAlpha;
-  final double trimPathStart;
-  final double trimPathEnd;
-  final double trimPathOffset;
 
   _PathValues(
-    this.pathData,
+    PathData pathData,
     this.fillColor,
     this.strokeColor,
     this.strokeWidth,
     this.strokeAlpha,
     this.fillAlpha,
-    this.trimPathStart,
-    this.trimPathEnd,
-    this.trimPathOffset,
-  );
+    double trimPathStart,
+    double trimPathEnd,
+    double trimPathOffset,
+  ) : pathData = pathData.segmentsFrom(
+          (trimPathStart + trimPathOffset)
+              .clamp(0.0, (trimPathEnd + trimPathOffset).clamp(0.0, 1.0)),
+          (trimPathEnd + trimPathOffset).clamp(0.0, 1.0),
+        );
 }
 
 enum RenderVectorCachingStrategy {
@@ -648,11 +649,8 @@ class RenderVector extends RenderBox {
   }
 
   static ui.Path _uiPathForPath(PathData pathData) {
-    final normalizer = SvgPathNormalizer();
     final creator = _UiPathBuilderProxy();
-    for (final segment in pathData.segments) {
-      emitSegmentWithoutMutation(segment, creator, normalizer);
-    }
+    pathData.emitTo(creator);
     return creator.path;
   }
 
