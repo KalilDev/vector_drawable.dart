@@ -41,8 +41,8 @@ Target _parseTarget(XmlElement node) {
 }
 
 AnimatedVectorDrawable parseAnimatedVectorDrawable(
-        XmlHasChildren doc, ResourceReference? source) =>
+        XmlElement doc, ResourceReference? source) =>
     AnimatedVectorDrawable(
-      _parseAnimatedVector(doc.childElements.single),
+      _parseAnimatedVector(doc),
       source,
     );

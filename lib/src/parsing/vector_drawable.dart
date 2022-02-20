@@ -11,10 +11,9 @@ import '../model/vector_drawable.dart';
 import 'exception.dart';
 import 'util.dart';
 
-VectorDrawable parseVectorDrawable(
-        XmlHasChildren doc, ResourceReference? source) =>
+VectorDrawable parseVectorDrawable(XmlElement doc, ResourceReference? source) =>
     VectorDrawable(
-      _parseVector(doc.childElements.single),
+      _parseVector(doc),
       source,
     );
 

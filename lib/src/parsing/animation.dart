@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart' hide Animation;
 import 'package:vector_drawable/src/parsing/resource.dart';
+import 'package:vector_drawable/src/parsing/style.dart';
 import '../model/animation.dart';
 import 'package:xml/xml.dart';
 import 'package:path_parsing/path_parsing.dart';
@@ -17,8 +18,6 @@ AnimationNode _parseAnimationNode(XmlElement node) {
       return _parseAnimationSet(node);
     case 'objectAnimator':
       return _parseObjectAnimation(node);
-    case 'animator':
-      return _parseAnimation(node);
     default:
       throw ParseException(node, 'is not valid type');
   }
@@ -39,29 +38,6 @@ Object _parseValue(String value, ValueType type) {
   return PathData.fromString(value);
 }
 
-Animation _parseAnimation(XmlElement node) {
-  if (node.name.qualified != 'animator') {
-    throw ParseException(node, 'is not animator');
-  }
-  final valueType =
-      node.getAndroidAttribute('valueType')?.map(_parseValueType) ??
-          ValueType.floatType;
-  return Animation(
-    duration: node.getAndroidAttribute('duration')?.map(int.parse) ?? 300,
-    valueFrom: node
-        .getAndroidAttribute('valueFrom')!
-        .map((v) => _parseValue(v, valueType)),
-    valueTo: node
-        .getAndroidAttribute('valueTo')!
-        .map((v) => _parseValue(v, valueType)),
-    startOffset: node.getAndroidAttribute('startOffset')?.map(int.parse) ?? 0,
-    repeatCount: node.getAndroidAttribute('repeatCount')?.map(int.parse) ?? 0,
-    repeatMode: node.getAndroidAttribute('repeatMode')?.map(_parseRepeatMode) ??
-        RepeatMode.repeat,
-    valueType: valueType,
-  );
-}
-
 Keyframe _parseKeyframe(XmlElement node) {
   final valueType =
       node.getAndroidAttribute('valueType')?.map(_parseValueType) ??
@@ -72,13 +48,13 @@ Keyframe _parseKeyframe(XmlElement node) {
         .getAndroidAttribute('value')!
         .map((v) => _parseValue(v, valueType)),
     fraction: node.getAndroidAttribute('propertyName')!.map(double.parse),
-    interpolator: node.inlineResourceOrAttribute('interpolator',
-        parse: _parseInterpolator),
+    interpolator: node.inlineResourceOrAttribute(
+      'interpolator',
+      namespace: kAndroidXmlNamespace,
+      parse: Interpolator.parseElement,
+    ),
   );
 }
-
-Interpolator _parseInterpolator(XmlElement el) =>
-    Interpolator(null, el.name.local);
 
 PropertyValuesHolder _parsePropertyValuesHolder(XmlElement node) {
   if (node.name.qualified != 'propertyValuesHolder') {
@@ -101,8 +77,16 @@ PropertyValuesHolder _parsePropertyValuesHolder(XmlElement node) {
         : node
             .getAndroidAttribute('valueTo')!
             .map((v) => _parseValue(v, valueType)),
-    keyframes:
-        useKeyframes ? node.childElements.map(_parseKeyframe).toList() : null,
+    interpolator: useKeyframes
+        ? null
+        : node.inlineResourceOrAttribute(
+            'interpolator',
+            namespace: kAndroidXmlNamespace,
+            parse: Interpolator.parseElement,
+          ),
+    keyframes: useKeyframes
+        ? node.realChildElements.map(_parseKeyframe).toList()
+        : null,
   );
 }
 
@@ -110,30 +94,51 @@ ObjectAnimation _parseObjectAnimation(XmlElement node) {
   if (node.name.qualified != 'objectAnimator') {
     throw ParseException(node, 'is not objectAnimator');
   }
-  final useHolders = node.childElements.isNotEmpty;
+  final useHolders = node.realChildElements.isNotEmpty;
   final valueType =
       node.getAndroidAttribute('valueType')?.map(_parseValueType) ??
           ValueType.floatType;
+  final useCoordinates = node.getAndroidAttribute('pathData') != null;
   return ObjectAnimation(
-    propertyName: node.getAndroidAttribute('propertyName')!,
+    propertyName:
+        useCoordinates ? null : node.getAndroidAttribute('propertyName'),
+    propertyXName:
+        useCoordinates ? node.getAndroidAttribute('propertyXName') : null,
+    propertyYName:
+        useCoordinates ? node.getAndroidAttribute('propertyYName') : null,
+    pathData: useCoordinates
+        ? node.getStyleOrAndroidAttribute(
+            'pathData',
+            parse: PathData.fromString,
+          )
+        : null,
     duration: node.getAndroidAttribute('duration')?.map(int.parse) ?? 300,
     valueFrom: useHolders
         ? null
-        : node
-            .getAndroidAttribute('valueFrom')
-            ?.map((v) => _parseValue(v, valueType)),
+        : node.getStyleOrAndroidAttribute(
+            'valueFrom',
+            parse: (v) => _parseValue(v, valueType),
+          ),
     valueTo: useHolders
         ? null
-        : node
-            .getAndroidAttribute('valueTo')!
-            .map((v) => _parseValue(v, valueType)),
+        : node.getStyleOrAndroidAttribute(
+            'valueTo',
+            parse: (v) => _parseValue(v, valueType),
+          ),
     startOffset: node.getAndroidAttribute('startOffset')?.map(int.parse) ?? 0,
     repeatCount: node.getAndroidAttribute('repeatCount')?.map(int.parse) ?? 0,
     repeatMode: node.getAndroidAttribute('repeatMode')?.map(_parseRepeatMode) ??
         RepeatMode.repeat,
     valueType: valueType,
+    interpolator: useHolders
+        ? null
+        : node.inlineResourceOrAttribute(
+            'interpolator',
+            namespace: kAndroidXmlNamespace,
+            parse: Interpolator.parseElement,
+          ),
     valueHolders: useHolders
-        ? node.childElements.map(_parsePropertyValuesHolder).toList()
+        ? node.realChildElements.map(_parsePropertyValuesHolder).toList()
         : null,
   );
 }
@@ -155,8 +160,8 @@ RepeatMode? _parseRepeatMode(String text) => parseEnum(text, RepeatMode.values);
 ValueType? _parseValueType(String text) => parseEnum(text, ValueType.values);
 
 AnimationResource parseAnimationResource(
-        XmlHasChildren docOrEl, ResourceReference? source) =>
+        XmlElement el, ResourceReference? source) =>
     AnimationResource(
-      _parseAnimationNode(docOrEl.childElements.single),
+      _parseAnimationNode(el),
       source,
     );
