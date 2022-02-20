@@ -179,14 +179,26 @@ class ColorSchemeStyleMapping extends StyleMapping with Diagnosticable {
           return scheme.primary;
         case 'colorOnPrimary':
           return scheme.onPrimary;
+        case 'colorPrimaryContainer':
+          return scheme.primaryContainer;
+        case 'colorOnPrimaryContainer':
+          return scheme.onPrimaryContainer;
         case 'colorSecondary':
           return scheme.secondary;
         case 'colorOnSecondary':
           return scheme.onSecondary;
+        case 'colorSecondaryContainer':
+          return scheme.secondaryContainer;
+        case 'colorOnSecondaryContainer':
+          return scheme.onSecondaryContainer;
         case 'colorTertiary':
           return scheme.tertiary;
         case 'colorOnTertiary':
           return scheme.onTertiary;
+        case 'colorTertiaryContainer':
+          return scheme.tertiaryContainer;
+        case 'colorOnTertiaryContainer':
+          return scheme.onTertiaryContainer;
         case 'colorError':
           return scheme.error;
         case 'colorOnError':
@@ -635,23 +647,11 @@ class RenderVector extends RenderBox {
     }
   }
 
-  static void _copySegmentInto(
-          PathSegmentData source, PathSegmentData target) =>
-      target
-        ..command = source.command
-        ..targetPoint = source.targetPoint
-        ..point1 = source.point1
-        ..point2 = source.point2
-        ..arcSweep = source.arcSweep
-        ..arcLarge = source.arcLarge;
-
   static ui.Path _uiPathForPath(_PathValues path) {
     final normalizer = SvgPathNormalizer();
     final creator = _UiPathBuilderProxy();
-    final mutableSegment = PathSegmentData();
     for (final segment in path.pathData.segments) {
-      _copySegmentInto(segment, mutableSegment);
-      normalizer.emitSegment(mutableSegment, creator);
+      emitSegmentWithoutMutation(segment, creator, normalizer);
     }
     return creator.path;
   }
