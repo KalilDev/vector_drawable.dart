@@ -138,8 +138,10 @@ class CodegenAnimationResourceVisitor
           'valueFrom', context, node.valueFrom, _visitStyleOrValue);
       _writeNamed('valueTo', context, node.valueTo!, _visitStyleOrValue);
     }
-    _maybeWriteNamed('startOffset', context, node.duration, 0, _visitStringify);
-    _maybeWriteNamed('repeatCount', context, node.duration, 0, _visitStringify);
+    _maybeWriteNamed(
+        'startOffset', context, node.startOffset, 0, _visitStringify);
+    _maybeWriteNamed(
+        'repeatCount', context, node.repeatCount, 0, _visitStringify);
     _maybeWriteNamed('repeatMode', context, node.repeatMode, RepeatMode.repeat,
         _visitStringify);
     _maybeWriteNamed('valueType', context, node.valueType, ValueType.floatType,
@@ -205,7 +207,7 @@ StringBuffer _visitDimension(Dimension v, StringBuffer context) {
 }
 
 StringBuffer _visitString(String v, StringBuffer context) {
-  context.write("'");
+  context.write("r'");
   context.write(v);
   context.write("'");
   return context;
@@ -329,7 +331,7 @@ class CodegenVectorDrawableVisitor extends VectorDrawableVisitor<StringBuffer>
     context ??= StringBuffer();
     context.write('ClipPath(');
     _writeNamedOrNull('name', context, node.name, _visitString);
-    _writeNamed('pathData', context, node.pathData, _visitStyleOrStringify);
+    _writeNamed('pathData', context, node.pathData, _visitStyleOrPathData);
     context.write('children: [');
     for (final child in node.children) {
       visitVectorPart(child, context);
@@ -354,7 +356,7 @@ class CodegenVectorDrawableVisitor extends VectorDrawableVisitor<StringBuffer>
     _writeNamedOrNull(
         'translateX', context, node.translateX, _visitStyleOrStringify);
     _writeNamedOrNull(
-        'translateY', context, node.translateX, _visitStyleOrStringify);
+        'translateY', context, node.translateY, _visitStyleOrStringify);
     context.write('children: [');
     for (final child in node.children) {
       visitVectorPart(child, context);

@@ -49,7 +49,7 @@ class ResourceOrReference<T extends Resource>
   ResourceOrReference.empty() : reference = null;
   ResourceOrReference.reference(this.reference);
   ResourceOrReference.resource(this.resource) : reference = null;
-  ResourceOrReference(this.reference, this.resource);
+  ResourceOrReference(this.resource, this.reference);
   final ResourceReference? reference;
   T? resource;
 
@@ -73,5 +73,5 @@ class ResourceOrReference<T extends Resource>
       fn<T>(this);
 
   @override
-  ResourceOrReference<T> clone() => ResourceOrReference(reference, resource);
+  ResourceOrReference<T> clone() => ResourceOrReference(resource, reference);
 }

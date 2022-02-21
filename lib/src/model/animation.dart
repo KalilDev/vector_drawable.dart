@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:vector_drawable/vector_drawable.dart';
@@ -157,6 +159,15 @@ class Keyframe with Diagnosticable implements Clonable<Keyframe> {
       );
 }
 
+class LinearInterpolator extends Interpolator {
+  LinearInterpolator({
+    ResourceReference? source,
+  }) : super(source);
+
+  @override
+  double transform(double t) => t;
+}
+
 class PathInterpolator extends Interpolator {
   final PathData pathData;
   PathInterpolator({
@@ -164,8 +175,57 @@ class PathInterpolator extends Interpolator {
     ResourceReference? source,
   }) : super(source);
 
+  PathInterpolator.cubic({
+    required double controlX1,
+    required double controlY1,
+    required double controlX2,
+    required double controlY2,
+    ResourceReference? source,
+  })  : pathData = PathData.fromCubicSegments([
+          StandaloneCubic(
+            Offset.zero,
+            Offset(controlX1, controlY1),
+            Offset(controlX2, controlY2),
+            const Offset(1, 1),
+          ),
+        ]),
+        super(source);
+
+  PathInterpolator.quadratic({
+    required double controlX,
+    required double controlY,
+    ResourceReference? source,
+  })  : pathData = PathData.fromCubicSegments([
+          StandaloneCubic(
+            Offset.zero,
+            Offset(controlX * 1 / 3, controlY * 1 / 3),
+            Offset(controlX * 2 / 3, controlY * 2 / 3),
+            const Offset(1, 1),
+          ),
+        ]),
+        super(source);
+
+  static const int _kPrecisionSteps = 30;
+  late final List<Offset> _vals = List.generate(
+      _kPrecisionSteps, (i) => pathData.evaluateAt(i / _kPrecisionSteps));
   @override
-  double transform(double t) => pathData.evaluateAt(t).dy;
+  double transform(double x) {
+    double lastX = 0;
+    double lastY = 0;
+    // TODO: bisect
+    final it = _vals.iterator;
+    while (it.moveNext() && lastX < x) {
+      final v = it.current;
+      if (v.dx >= x) {
+        final dtX = (x - lastX) / (v.dx - lastX);
+        final e = lerpDouble(lastY, v.dy, dtX)!;
+        return e;
+      }
+      lastX = v.dx;
+      lastY = v.dy;
+    }
+    return 1;
+  }
 }
 
 class CurveInterpolator extends Interpolator {

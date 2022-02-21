@@ -3,13 +3,16 @@ import 'dart:io';
 
 import 'package:code_generator/sorted_animated_list/controller.dart';
 import 'package:code_generator/sorted_animated_list/widget.dart';
+import 'package:dart_style/dart_style.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:material_widgets/material_widgets.dart';
 import 'package:path/path.dart' as p;
 import 'package:value_notifier/value_notifier.dart';
 import 'package:vector_drawable/vector_drawable.dart';
 import 'package:xml/xml.dart';
+import 'package:vector_drawable/src/visiting/codegen.dart';
 import 'package:vector_drawable/src/visiting/async_resolver.dart';
 import 'package:file_picker/file_picker.dart' as picker;
 
@@ -28,7 +31,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InheritedControllerInjector(
-      factory: (_) => ResourceController(null, []),
+      factory: (_) => ResourceController(null, [], {}),
       child: MD3Themes(
         monetThemeForFallbackPalette: MonetTheme.baseline3p,
         builder: (context, light, dark) => MaterialApp(
@@ -65,6 +68,68 @@ class _ListEntranceTransition extends StatelessWidget {
       );
 }
 
+class _NamespaceDialog extends StatefulWidget {
+  const _NamespaceDialog({Key? key}) : super(key: key);
+
+  @override
+  __NamespaceDialogState createState() => __NamespaceDialogState();
+}
+
+class __NamespaceDialogState extends State<_NamespaceDialog> {
+  String namespace = '';
+  Directory? root;
+
+  void _pop(BuildContext context) {
+    Navigator.of(context).pop<MapEntry<String, Directory>>(null);
+  }
+
+  void _popResult(BuildContext context) {
+    Navigator.of(context)
+        .pop<MapEntry<String, Directory>>(MapEntry(namespace, root!));
+  }
+
+  void _setNamespace(String value) => setState(() => namespace = value);
+  void _setRoot(String value) => setState(() => root = Directory(value));
+
+  bool get _canPopResult => namespace.isNotEmpty && root != null;
+
+  @override
+  Widget build(BuildContext context) => MD3BasicDialog(
+        title: Text('Adicionar namespace'),
+        icon: Icon(Icons.developer_board),
+        content: Column(
+          children: [
+            _TextField(
+              value: namespace,
+              onChange: _setNamespace,
+              autofocus: true,
+              decoration: InputDecoration(
+                filled: true,
+                icon: Icon(null),
+                labelText: 'Nome',
+              ),
+            ),
+            _DirectoryField(
+              path: root?.path ?? Directory.current.path,
+              onChange: _setRoot,
+              decoration: InputDecoration(
+                filled: true,
+                icon: Icon(null),
+                labelText: 'Pasta',
+              ),
+            )
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => _pop(context), child: Text('Cancelar')),
+          TextButton(
+            onPressed: _canPopResult ? () => _popResult(context) : null,
+            child: Text('Salvar'),
+          ),
+        ],
+      );
+}
+
 class MyHomePage extends StatelessWidget {
   const MyHomePage({Key? key}) : super(key: key);
 
@@ -74,7 +139,20 @@ class MyHomePage extends StatelessWidget {
     picker.FilePicker.platform
         .getDirectoryPath()
         .then((path) => path == null ? null : Directory(path))
-        .then((e) => e != null ? controller.setRootDir(e) : null);
+        .then((e) {
+      print(e);
+      e != null ? controller.setRootDir(e) : null;
+    });
+  }
+
+  void _showNamespaceDialog(BuildContext context) {
+    final controller =
+        InheritedController.get<ResourceController>(context).unwrap;
+    showDialog(context: context, builder: (_) => _NamespaceDialog()).then(
+      (entry) => entry == null
+          ? null
+          : controller.addNamespace(entry.key, entry.value),
+    );
   }
 
   void _showAddDialog(BuildContext context) {
@@ -98,6 +176,10 @@ class MyHomePage extends StatelessWidget {
     return MD3AdaptativeScaffold(
       appBar: MD3CenterAlignedAppBar(
         title: Text('Resource code generator'),
+        trailing: _SaveButton(
+          toBeSaved: controller.formattedGeneratedCode,
+          snackbarContent: Text('O código para os resources foi copiado!'),
+        ),
       ),
       body: controller.rootDir
           .map(
@@ -114,29 +196,49 @@ class MyHomePage extends StatelessWidget {
                           )
                         ]),
                   )
-                : Column(
-                    children: [
-                      InputDecorator(
-                        decoration: const InputDecoration(
-                          filled: true,
-                          icon: Icon(Icons.folder),
-                          labelText: 'Base dos recusos',
-                        ),
-                        child: InkWell(
-                          onTap: () => _showRootDialog(context),
-                          child: Text(root.path),
+                : CustomScrollView(
+                    slivers: [
+                      SliverToBoxAdapter(
+                        child: _DirectoryField(
+                          decoration: InputDecoration(
+                            filled: true,
+                            icon: Icon(Icons.folder),
+                            labelText: 'Base dos recusos',
+                            suffixIcon: IconButton(
+                              onPressed: () => controller.setRootDir(null),
+                              icon: Icon(Icons.delete_outline_outlined),
+                            ),
+                          ),
+                          path: root.path,
+                          onChange: (path) =>
+                              controller.setRootDir(Directory(path)),
                         ),
                       ),
-                      Expanded(
-                        child: SortedAnimatedList<FileController>(
-                          controller: controller.avdFilesController.unwrap,
-                          itemBuilder: (context, file, anim) =>
-                              _ListEntranceTransition(
-                            animation: anim,
-                            child: _FileWidget(file: file.handle),
+                      SliverSortedAnimatedList<NamespaceController>(
+                        controller: controller.namespacesController.unwrap,
+                        itemBuilder: (context, namespace, anim) =>
+                            _ListEntranceTransition(
+                          animation: anim,
+                          child: _NamespaceWidget(namespace: namespace.handle),
+                        ),
+                      ),
+                      SliverToBoxAdapter(
+                        child: Center(
+                          child: FilledButton.icon(
+                            onPressed: () => _showNamespaceDialog(context),
+                            icon: Icon(Icons.add),
+                            label: Text('Adicionar namespace'),
                           ),
                         ),
-                      )
+                      ),
+                      SliverSortedAnimatedList<FileController>(
+                        controller: controller.avdFilesController.unwrap,
+                        itemBuilder: (context, file, anim) =>
+                            _ListEntranceTransition(
+                          animation: anim,
+                          child: _FileWidget(file: file.handle),
+                        ),
+                      ),
                     ],
                   ),
           )
@@ -154,6 +256,147 @@ class MyHomePage extends StatelessWidget {
   }
 }
 
+class _NamespaceWidget extends StatelessWidget {
+  const _NamespaceWidget({
+    Key? key,
+    required this.namespace,
+  }) : super(key: key);
+  final ControllerHandle<NamespaceController> namespace;
+
+  @override
+  Widget build(BuildContext context) => OutlinedCard(
+        key: ObjectKey(namespace),
+        style: CardStyle(
+          padding: MaterialStateProperty.all(
+            const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+          ),
+        ),
+        child: Column(
+          children: [
+            namespace.unwrap.name
+                .map(
+                  (name) => _TextField(
+                    value: name,
+                    onSubmit: namespace.unwrap.setName,
+                    decoration: InputDecoration(
+                      filled: true,
+                      icon: Icon(null),
+                      labelText: 'Nome do namespace',
+                    ),
+                  ),
+                )
+                .build(),
+            namespace.unwrap.root
+                .map(
+                  (root) => _DirectoryField(
+                    decoration: InputDecoration(
+                      filled: true,
+                      icon: Icon(Icons.folder),
+                      labelText: 'Base do namespace',
+                    ),
+                    path: root.path,
+                    onChange: (path) =>
+                        namespace.unwrap.setRoot(Directory(path)),
+                  ),
+                )
+                .build()
+          ],
+        ),
+      );
+}
+
+class _DirectoryField extends StatelessWidget {
+  const _DirectoryField({
+    Key? key,
+    required this.path,
+    required this.onChange,
+    this.decoration,
+  }) : super(key: key);
+  final String path;
+  final ValueChanged<String> onChange;
+  final InputDecoration? decoration;
+  void _showFilesystemDialog(BuildContext context) {
+    picker.FilePicker.platform
+        .getDirectoryPath()
+        .then((e) => e == path ? null : e)
+        .then((path) => path != null ? onChange(path) : null);
+  }
+
+  @override
+  Widget build(BuildContext context) => InputDecorator(
+        decoration: decoration ?? const InputDecoration(),
+        child: InkWell(
+          onTap: () => _showFilesystemDialog(context),
+          child: Text(path),
+        ),
+      );
+}
+
+class _TextField extends StatefulWidget {
+  const _TextField({
+    Key? key,
+    required this.value,
+    this.onChange,
+    this.onSubmit,
+    this.decoration,
+    this.autofocus = false,
+  }) : super(key: key);
+  final String value;
+  final ValueChanged<String>? onChange;
+  final ValueChanged<String>? onSubmit;
+  final InputDecoration? decoration;
+  final bool autofocus;
+
+  @override
+  __TextFieldState createState() => __TextFieldState();
+}
+
+class __TextFieldState extends State<_TextField> {
+  late final TextEditingController controller;
+  void initState() {
+    super.initState();
+    controller = TextEditingController(text: widget.value);
+  }
+
+  @override
+  void didUpdateWidget(_TextField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.value != widget.value && controller.text != widget.value) {
+      controller.text = widget.value;
+    }
+  }
+
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  void _onChange(String s) {
+    if (s == widget.value) {
+      return;
+    }
+    widget.onChange?.call(s);
+  }
+
+  void _onSubmit(String s) {
+    if (s == widget.value) {
+      return;
+    }
+    widget.onSubmit?.call(s);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      autofocus: widget.autofocus,
+      onChanged: _onChange,
+      onSubmitted: _onSubmit,
+      decoration: widget.decoration,
+    );
+  }
+}
+
 class _FileWidget extends StatefulWidget {
   const _FileWidget({
     Key? key,
@@ -165,8 +408,38 @@ class _FileWidget extends StatefulWidget {
   State<_FileWidget> createState() => _FileWidgetState();
 }
 
+class _SaveButton extends StatelessWidget {
+  const _SaveButton({
+    Key? key,
+    required this.toBeSaved,
+    required this.snackbarContent,
+    this.icon = const Icon(Icons.copy),
+  }) : super(key: key);
+  final Widget snackbarContent;
+  final ValueListenable<AsyncSnapshot<String>> toBeSaved;
+  final Widget icon;
+
+  Widget _button(BuildContext context, String data) => IconButton(
+        onPressed: () {
+          Clipboard.setData(ClipboardData(text: data)).then((_) =>
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(SnackBar(content: snackbarContent)));
+        },
+        icon: icon,
+      );
+  @override
+  Widget build(BuildContext context) => toBeSaved
+      .map(
+        (toBeSaved) => toBeSaved.hasData
+            ? _button(context, toBeSaved.requireData)
+            : CircularProgressIndicator(),
+      )
+      .build();
+}
+
 class _FileWidgetState extends State<_FileWidget> {
   final GlobalKey<AnimatedVectorState> animatedVectorKey = GlobalKey();
+  void _save(BuildContext context) {}
   @override
   Widget build(BuildContext context) => FilledCard(
         style: CardStyle(
@@ -179,19 +452,33 @@ class _FileWidgetState extends State<_FileWidget> {
             Row(
               children: [
                 Expanded(
-                  child: widget.file.unwrap.relativeFile
-                      .map((rel) =>
-                          Text(rel.path, style: context.textTheme.titleLarge))
-                      .build(),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      widget.file.unwrap.relativeFile
+                          .map((rel) => Text(rel.path,
+                              style: context.textTheme.titleLarge))
+                          .build(),
+                      Text(widget.file.unwrap.ref.toString(),
+                          style: context.textTheme.titleSmall),
+                    ],
+                  ),
                 ),
-                IconButton(
-                  onPressed: widget.file.unwrap.onDelete,
-                  icon: Icon(Icons.delete_outline),
+                Column(
+                  children: [
+                    IconButton(
+                      onPressed: widget.file.unwrap.onDelete,
+                      icon: Icon(Icons.delete_outline),
+                    ),
+                    _SaveButton(
+                      toBeSaved: widget.file.unwrap.formattedGeneratedCode,
+                      snackbarContent: Text(
+                          'O código para ${widget.file.unwrap.ref} foi copiado!'),
+                    ),
+                  ],
                 )
               ],
             ),
-            Text(widget.file.unwrap.ref.toString(),
-                style: context.textTheme.titleSmall),
             _HorizontalCenter(
                 child: widget.file.unwrap.resolvedVectorSnap
                     .map((snap) => snap.hasData
@@ -304,13 +591,52 @@ class _ExpansionAnimation extends StatelessWidget {
 
 int _compareFileController(FileController a, FileController b) =>
     a.file.path.compareTo(b.file.path);
+int _compareNamespaceController(NamespaceController a, NamespaceController b) =>
+    a.name.value.compareTo(b.name.value);
+
+class NamespaceController
+    extends SubcontrollerBase<ResourceController, NamespaceController> {
+  final ValueNotifier<String> _name;
+  final ValueNotifier<Directory> _root;
+  final ActionNotifier _didDelete = ActionNotifier();
+
+  NamespaceController(String name, Directory root)
+      : _name = ValueNotifier(name),
+        _root = ValueNotifier(root);
+
+  ValueListenable<String> get name => _name.view();
+  ValueListenable<Directory> get root => _root.view();
+  ValueListenable<void> get didDelete => _didDelete.view();
+
+  ValueListenable<MapEntry<String, Directory>> get entry =>
+      name.bind((name) => root.map((root) => MapEntry(name, root)));
+
+  late final setName = _name.setter;
+  late final setRoot = _root.setter;
+  late final onDelete = _didDelete.notify;
+}
+
+extension AsyncSnapE<T> on AsyncSnapshot<T> {
+  AsyncSnapshot<R> map<R>(R Function(T) fn) => hasData
+      ? AsyncSnapshot<R>.withData(connectionState, fn(requireData))
+      : hasError
+          ? AsyncSnapshot<R>.withError(
+              connectionState, error!, stackTrace ?? StackTrace.empty)
+          : AsyncSnapshot<R>.nothing().inState(connectionState);
+  AsyncSnapshot<R> bind<R>(AsyncSnapshot<R> Function(T) fn) => hasData
+      ? fn(requireData)
+      : hasError
+          ? AsyncSnapshot<R>.withError(
+              connectionState, error!, stackTrace ?? StackTrace.empty)
+          : AsyncSnapshot<R>.nothing().inState(connectionState);
+}
 
 class FileController
     extends SubcontrollerBase<ResourceController, FileController> {
   final File file;
   final ValueNotifier<AsyncResourceResolver?> _resolver;
   final ValueNotifier<Directory?> _root;
-  final ActionNotifier _wasDeleted = ActionNotifier();
+  final ActionNotifier _didDelete = ActionNotifier();
 
   FileController(File file, Directory? root, AsyncResourceResolver? resolver)
       : file = file,
@@ -326,20 +652,31 @@ class FileController
       _parsedVectorSnap.view();
   ValueListenable<AsyncSnapshot<AnimatedVectorDrawable>>
       get resolvedVectorSnap => _resolvedVector.view();
+  ValueListenable<AsyncSnapshot<String>> get generatedCode =>
+      resolvedVectorSnap.map((e) => e
+          .map((drawable) => CodegenAnimatedVectorDrawableVisitor()
+              .visitAnimatedVectorDrawable(e.requireData)
+              .toString())
+          .map((code) => 'final ${ref.name} = $code;'));
+  // late final because _formatCode is expensive
+  late final ValueListenable<AsyncSnapshot<String>> _formattedGeneratedCode =
+      generatedCode.map((code) => code.map(_formatStatement));
+  ValueListenable<AsyncSnapshot<String>> get formattedGeneratedCode =>
+      _formattedGeneratedCode.view();
   ValueListenable<File> get relativeFile =>
       _root.view().map((root) => File(p.relative(file.path, from: root?.path)));
 
-  ValueListenable<void> get wasDeleted => _wasDeleted.view();
+  ValueListenable<void> get didDelete => _didDelete.view();
   late final setResolver = _resolver.setter;
   late final setRoot = _root.setter;
-  late final onDelete = _wasDeleted.notify;
+  late final onDelete = _didDelete.notify;
 
   void init() {
     super.init();
     file
         .watch(events: FileSystemEvent.delete)
         .toValueListenable()
-        .listen(_wasDeleted.notify);
+        .listen(_didDelete.notify);
     _parsedVectorSnap = file
         .watch(events: FileSystemEvent.modify)
         .toValueListenable()
@@ -403,9 +740,9 @@ class FileController
 }
 
 class AndroidFilesystemResourceResolver extends AsyncResourceResolver {
-  final Directory root;
+  final Map<String, Directory> namespacesMap;
 
-  AndroidFilesystemResourceResolver(this.root);
+  AndroidFilesystemResourceResolver(this.namespacesMap);
   final Map<ResourceReference, FutureOr<Resource?>> _resourceCache = {};
 
   R? _parseDocumentAs<R extends Resource>(
@@ -430,8 +767,13 @@ class AndroidFilesystemResourceResolver extends AsyncResourceResolver {
       return Future.value(_resourceCache[reference] as FutureOr<R?>);
     }
     return _resourceCache[reference] = () async {
+      final namespaceRoot = namespacesMap[reference.namespace];
+      if (namespaceRoot == null) {
+        return null;
+      }
       final file = File(p.setExtension(
-          p.join(root.path, reference.folder, reference.name), '.xml'));
+          p.join(namespaceRoot.path, reference.folder, reference.name),
+          '.xml'));
       final fileContents = await file.readAsString();
       final document = XmlDocument.parse(fileContents);
       final resource = _parseDocumentAs<R>(document, reference);
@@ -442,8 +784,7 @@ class AndroidFilesystemResourceResolver extends AsyncResourceResolver {
   @override
   Future<void> resolveMany(Iterable<ResourceOrReference<Resource>> reference) {
     final unresolved = reference
-        .where((element) => element.isResolvable && !element.isResolved)
-        .toSet();
+        .where((element) => element.isResolvable && !element.isResolved);
     return Future.wait(unresolved.map(
       (e) => e.runWithResourceType<Future<void>>(
           <R extends Resource>(self) => resolve<R>(self.reference!).then(
@@ -453,26 +794,95 @@ class AndroidFilesystemResourceResolver extends AsyncResourceResolver {
   }
 }
 
+String _formatCode(String code) {
+  final formatter = DartFormatter();
+  return formatter.format(code);
+}
+
+String _formatStatement(String statement) {
+  final formatter = DartFormatter();
+  return formatter.formatStatement(statement);
+}
+
 class ResourceController extends ControllerBase<ResourceController> {
   final ValueNotifier<Directory?> _rootDir;
   final SortedAnimatedListController<FileController> _avdFiles;
+  final SortedAnimatedListController<NamespaceController> _namespaces;
   final Set<File> _currentFiles = {};
 
-  ResourceController(Directory? root, Iterable<File> files)
-      : _rootDir = ValueNotifier(root),
+  ResourceController(
+    Directory? root,
+    Iterable<File> files,
+    Map<String, Directory> namespaces,
+  )   : _rootDir = ValueNotifier(root),
         _avdFiles = SortedAnimatedListController.from(
           files.map((f) => FileController.new(f, root, null)),
           _compareFileController,
+        ),
+        _namespaces = SortedAnimatedListController.from(
+          namespaces.entries.map((e) => NamespaceController(e.key, e.value)),
+          _compareNamespaceController,
         );
+  // Late final because there can be a lot of operations, so taking an view is cheaper
+  late final ValueListenable<Map<String, Directory>> _namespacesMap =
+      _namespaces.values.bind(
+    (vals) => vals.fold<ValueListenable<Map<String, Directory>>>(
+      SingleValueListenable({}),
+      (prev, e) => prev.bind(
+        (prev) => e.entry.map(
+          (entry) => Map.fromEntries(prev.entries.followedBy([entry])),
+        ),
+      ),
+    ),
+  );
   // Late final because the AndroidFilesystemResourceResolver has side effects.
-  late final ValueListenable<AsyncResourceResolver?> _resolver = _rootDir.map(
-      (dir) => dir == null ? null : AndroidFilesystemResourceResolver(dir));
+  late final ValueListenable<AsyncResourceResolver?> _resolver =
+      namespacesMap.bind((namespacesMap) => rootDir.map((dir) => dir == null
+          ? null
+          : AndroidFilesystemResourceResolver({
+              '': dir,
+              ...namespacesMap,
+            })));
+
+  static const kImportStatements = [
+    "import 'package:flutter/material.dart' hide ClipPath;",
+    "import 'package:vector_drawable/vector_drawable.dart';",
+  ];
+
+  // holy snap, i hate this monad stacking that happens without monad
+  // transformers.
+  late final ValueListenable<AsyncSnapshot<String>> _generatedCode =
+      _avdFiles.values.bind(
+    (e) => e
+        .fold<ValueListenable<AsyncSnapshot<List<String>>>>(
+          SingleValueListenable(AsyncSnapshot.withData(
+            ConnectionState.done,
+            [...kImportStatements],
+          )),
+          (acc, e) => acc.bind((acc) => e.generatedCode.map(
+              (code) => acc.bind((acc) => code.map((code) => [...acc, code])))),
+        )
+        .map((decls) => decls.map((decls) => decls.join('\n'))),
+  );
+
+  // late final because _formatCode is expensive
+  late final ValueListenable<AsyncSnapshot<String>> _formattedGeneratedCode =
+      generatedCode.map((code) => code.map(_formatCode));
+
   ValueListenable<Directory?> get rootDir => _rootDir.view();
+  ValueListenable<AsyncSnapshot<String>> get generatedCode =>
+      _generatedCode.view();
+  ValueListenable<AsyncSnapshot<String>> get formattedGeneratedCode =>
+      _formattedGeneratedCode.view();
 
   ValueListenable<AsyncResourceResolver?> get resolver => _resolver.view();
+  ValueListenable<Map<String, Directory>> get namespacesMap =>
+      _namespacesMap.view();
 
   ControllerHandle<SortedAnimatedListController<FileController>>
       get avdFilesController => _avdFiles.handle;
+  ControllerHandle<SortedAnimatedListController<NamespaceController>>
+      get namespacesController => _namespaces.handle;
 
   late final setRootDir = _rootDir.setter;
 
@@ -483,9 +893,33 @@ class ResourceController extends ControllerBase<ResourceController> {
   }
 
   void _registerFileController(FileController file) {
-    file.wasDeleted.listen(() => _avdFiles.remove(file));
+    file.didDelete.listen(() => _avdFiles.remove(file));
     resolver.connect(file.setResolver);
     rootDir.connect(file.setRoot);
+  }
+
+  void _deleteNamespace(NamespaceController namespace) {
+    removeSubcontroller(namespace);
+    namespace.dispose();
+  }
+
+  void _registerNamespace(NamespaceController namespace) {
+    namespace.didDelete.listen(() => _namespaces.remove(namespace));
+    namespace.name.tap((_) => _namespaces.reSortValue(namespace));
+  }
+
+  void addNamespace(String name, Directory root) {
+    if (_namespacesMap.value.containsKey(name)) {
+      return;
+    }
+    if (!root.existsSync()) {
+      return;
+    }
+    final controller = ControllerBase.create(
+      () => NamespaceController(name, root),
+      register: _registerNamespace,
+    );
+    _namespaces.insert(addSubcontroller(controller));
   }
 
   void addFile(File file) {
@@ -511,13 +945,25 @@ class ResourceController extends ControllerBase<ResourceController> {
       addSubcontroller(controller);
     }
     addChild(_avdFiles);
+    for (final controller in _namespaces.values.value) {
+      addSubcontroller(controller);
+    }
+    addChild(_namespaces);
     _avdFiles.init();
     _avdFiles.didDiscardItem.tap(_deleteFileController);
+    _namespaces.init();
+    _namespaces.didDiscardItem.tap(_deleteNamespace);
   }
 
   void dispose() {
     IDisposable.disposeAll(_avdFiles.values.value);
-    IDisposable.disposeAll([_rootDir, _avdFiles, _resolver]);
+    IDisposable.disposeAll(_namespaces.values.value);
+    IDisposable.disposeAll([
+      _rootDir,
+      _avdFiles,
+      _namespaces,
+      _resolver,
+    ]);
     super.dispose();
   }
 }

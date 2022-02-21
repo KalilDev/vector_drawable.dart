@@ -1,4 +1,5 @@
 import 'dart:collection';
+import 'dart:developer';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -128,7 +129,7 @@ class PathData {
   PathData.fromString(String asString) : _asString = asString;
   PathData.fromSegments(Iterable<PathSegmentData> segments)
       : _segments = segments.toList();
-  PathData._fromCubicSegments(List<_StandaloneCubic> segments)
+  PathData.fromCubicSegments(List<StandaloneCubic> segments)
       : _finishedComputer = _PathCubicWriter.from(segments);
   String? _asString;
   List<PathSegmentData>? _segments;
@@ -185,17 +186,17 @@ class PathData {
     if (t0 == t1) {
       return PathData.fromSegments([]);
     }
-    return PathData._fromCubicSegments(_computer.segmentsFrom(t0, t1));
+    return PathData.fromCubicSegments(_computer.segmentsFrom(t0, t1));
   }
 }
 
-class _StandaloneCubic {
+class StandaloneCubic {
   final Offset p0;
   final Offset p1;
   final Offset p2;
   final Offset p3;
 
-  _StandaloneCubic(
+  StandaloneCubic(
     this.p0,
     this.p1,
     this.p2,
@@ -205,11 +206,23 @@ class _StandaloneCubic {
     final p0ToP1 = p1 - p0;
     final p1ToP2 = p2 - p1;
     final p2ToP3 = p3 - p2;
-    return p0 + (p0ToP1 * t) + (p1ToP2 * t) + (p2ToP3 * t);
+
+    final p01 = p0 + (p0ToP1 * t);
+    final p12 = p1 + (p1ToP2 * t);
+    final p23 = p2 + (p2ToP3 * t);
+
+    final p01toP12 = p12 - p01;
+    final p12toP23 = p23 - p12;
+    final p012 = p01 + (p01toP12 * t);
+    final p123 = p12 + (p12toP23 * t);
+
+    final p012toP123 = p123 - p012;
+    final target = p012 + (p012toP123 * t);
+    return target;
   }
 
   /// Algorithm from https://stackoverflow.com/questions/878862/drawing-part-of-a-b%c3%a9zier-curve-by-reusing-a-basic-b%c3%a9zier-curve-function/879213#879213
-  _StandaloneCubic segmentFrom(double t0, double t1) {
+  StandaloneCubic segmentFrom(double t0, double t1) {
     final x1 = p0.dx, y1 = p0.dy;
     final bx1 = p1.dx, by1 = p1.dy;
     final bx2 = p2.dx, by2 = p2.dy;
@@ -238,7 +251,7 @@ class _StandaloneCubic {
     final yc = qyb * u0 + qyd * t0;
     final yd = qyb * u1 + qyd * t1;
 
-    return _StandaloneCubic(
+    return StandaloneCubic(
       Offset(xa, ya),
       Offset(xb, yb),
       Offset(xc, yc),
@@ -285,7 +298,7 @@ class _StandaloneCubic {
 }
 
 class _PathCubicWriter extends PathProxy {
-  final List<_StandaloneCubic> _cubics;
+  final List<StandaloneCubic> _cubics;
   Offset _current = Offset.zero;
   Offset _start = Offset.zero;
 
@@ -365,8 +378,8 @@ class _PathCubicWriter extends PathProxy {
     final p1 = Offset(x1, y1);
     final p2 = Offset(x2, y2);
     final p3 = Offset(x3, y3);
+    _cubics.add(StandaloneCubic(p0, p1, p2, p3));
     _current = p3;
-    _cubics.add(_StandaloneCubic(p0, p1, p2, p3));
   }
 
   @override
@@ -376,7 +389,8 @@ class _PathCubicWriter extends PathProxy {
     final p0ToP3 = p3 - p0;
     final p1 = p0 + (p0ToP3 * (1 / 3));
     final p2 = p0 + (p0ToP3 * (2 / 3));
-    _cubics.add(_StandaloneCubic(p0, p1, p2, p3));
+    _cubics.add(StandaloneCubic(p0, p1, p2, p3));
+    _current = p3;
   }
 
   @override
@@ -406,7 +420,7 @@ class _PathCubicWriter extends PathProxy {
     return _cubics.last.p3;
   }
 
-  List<_StandaloneCubic> segmentsFrom(double t0, double t1) {
+  List<StandaloneCubic> segmentsFrom(double t0, double t1) {
     if (t0 == 0 && t1 == 1) {
       return _cubics;
     }
@@ -416,16 +430,18 @@ class _PathCubicWriter extends PathProxy {
     final targetWeigthPoint0 = t0 * totalWeigth;
     final targetWeigthPoint1 = t1 * totalWeigth;
     var currentAccumullatedWeigth = 0.0;
-    final result = <_StandaloneCubic>[];
+    final result = <StandaloneCubic>[];
     final it = _cubics.iterator;
-    while (it.moveNext() || currentAccumullatedWeigth < targetWeigthPoint1) {
+    while (it.moveNext() && currentAccumullatedWeigth < targetWeigthPoint1) {
       final point = it.current;
-      final t0 = ((targetWeigthPoint0 - currentAccumullatedWeigth) /
-              point.approximateWeigth)
-          .clamp(0.0, 1.0);
-      final t1 = ((targetWeigthPoint1 - currentAccumullatedWeigth) /
-              point.approximateWeigth)
-          .clamp(0.0, 1.0);
+      final pointWeigth = point.approximateWeigth;
+      final t0 =
+          ((targetWeigthPoint0 - currentAccumullatedWeigth) / pointWeigth)
+              .clamp(0.0, 1.0);
+      final t1 =
+          ((targetWeigthPoint1 - currentAccumullatedWeigth) / pointWeigth)
+              .clamp(0.0, 1.0);
+      currentAccumullatedWeigth += pointWeigth;
       // This cubic would be empty
       if (t0 == t1) {
         continue;

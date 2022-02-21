@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart' hide Animation;
 import 'package:vector_drawable/src/parsing/resource.dart';
 import 'package:vector_drawable/src/parsing/style.dart';
@@ -19,6 +21,7 @@ AnimationNode _parseAnimationNode(XmlElement node) {
     case 'objectAnimator':
       return _parseObjectAnimation(node);
     default:
+      debugger();
       throw ParseException(node, 'is not valid type');
   }
 }
