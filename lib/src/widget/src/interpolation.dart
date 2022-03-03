@@ -11,6 +11,7 @@ import 'package:value_notifier/src/idisposable_change_notifier.dart';
 import 'package:value_notifier/src/handle.dart';
 
 import '../../model/animation.dart';
+import '../../model/path.dart';
 import '../../model/vector_drawable.dart';
 
 class SingleStyleResolvable<T> extends StyleResolvable<T> with Diagnosticable {
@@ -144,29 +145,6 @@ num lerpNum(num a, num b, double t) {
   return lerped;
 }
 
-PathSegmentData lerpPathSegment(
-  PathSegmentData a,
-  PathSegmentData b,
-  double t,
-) {
-  return PathSegmentData()
-    ..command = t < 0.5 ? a.command : b.command
-    ..targetPoint = a.targetPoint * (1.0 - t) + b.targetPoint
-    ..point1 = a.point1 * (1.0 - t) + b.point1
-    ..point2 = a.point2 * (1.0 - t) + b.point2
-    ..arcSweep = t < 0.5 ? a.arcSweep : b.arcSweep
-    ..arcLarge = t < 0.5 ? a.arcLarge : b.arcLarge;
-}
-
-PathData lerpPathData(PathData a, PathData b, double t) {
-  final aSegments = a.segments;
-  final bSegments = b.segments;
-  return PathData.fromSegments([
-    for (var i = 0; i < aSegments.length; i++)
-      lerpPathSegment(aSegments[i], bSegments[i], t)
-  ]);
-}
-
 class Interpolation implements ValueTween {
   final Object begin;
   final Object end;
@@ -211,7 +189,7 @@ class _InterpolatedProperty
       return lerpNum(a, b, t);
     }
     if (a is PathData && b is PathData) {
-      return lerpPathData(a, b, t);
+      return PathData.lerp(a, b, t);
     }
     if (a is Color && b is Color) {
       return Color.lerp(a, b, t)!;
