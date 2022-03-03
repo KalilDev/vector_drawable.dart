@@ -21,6 +21,8 @@ class Dimension {
   final DimensionKind kind;
 
   Dimension(this.value, this.kind);
+  @override
+  String toString() => '$value${kind.name}';
 }
 
 class VectorDrawable extends Resource {
