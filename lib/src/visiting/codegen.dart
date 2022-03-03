@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import '../model/animated_vector_drawable.dart';
 import '../model/animation.dart';
+import '../model/path.dart';
 import '../model/resource.dart';
 import '../model/style.dart';
 import '../model/vector_drawable.dart';

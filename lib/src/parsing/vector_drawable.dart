@@ -6,6 +6,7 @@ import 'package:xml/xml.dart';
 import 'package:path_parsing/path_parsing.dart';
 import 'package:path_parsing/src/path_segment_type.dart';
 
+import '../model/path.dart';
 import '../model/resource.dart';
 import '../model/vector_drawable.dart';
 import 'exception.dart';

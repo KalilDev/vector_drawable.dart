@@ -4,6 +4,7 @@ import 'package:vector_drawable/vector_drawable.dart';
 import '../model/animation.dart';
 import 'package:xml/xml.dart';
 
+import '../model/path.dart';
 import 'exception.dart';
 
 LinearInterpolator _parseLinearInterpolator(

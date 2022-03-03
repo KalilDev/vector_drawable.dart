@@ -9,6 +9,7 @@ import 'package:path_parsing/path_parsing.dart';
 import '../parsing/animation.dart';
 import '../parsing/interpolator.dart';
 import 'animated_vector_drawable.dart';
+import 'path.dart';
 import 'resource.dart';
 import 'vector_drawable.dart';
 

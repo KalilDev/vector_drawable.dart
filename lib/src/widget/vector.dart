@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide ClipPath;
 import 'package:flutter/rendering.dart';
+import '../model/path.dart';
 import '../model/style.dart';
 import '../model/vector_drawable.dart';
 import 'package:vector_math/vector_math_64.dart' show Vector3;
