@@ -8,6 +8,8 @@ import 'package:path_parsing/path_parsing.dart';
 
 import '../parsing/animation.dart';
 import '../parsing/interpolator.dart';
+import '../serializing/animation.dart';
+import '../serializing/interpolator.dart';
 import 'animated_vector_drawable.dart';
 import 'path.dart';
 import 'resource.dart';
@@ -25,6 +27,15 @@ class AnimationResource extends Resource
       parseAnimationResource(document.rootElement, source);
   static AnimationResource parseElement(XmlElement document) =>
       parseAnimationResource(document, null);
+
+  static XmlDocument serializeDocument(AnimationResource animation) {
+    final builder = XmlBuilder();
+    serializeElement(builder, animation);
+    return builder.buildDocument();
+  }
+
+  static void serializeElement(XmlBuilder b, AnimationResource animation) =>
+      serializeAnimationResource(b, animation);
 
   @override
   AnimationResource clone() =>
@@ -260,6 +271,16 @@ abstract class Interpolator extends Resource {
       parseInterpolatorElement(element.rootElement, source);
   factory Interpolator.parseElement(XmlElement element) =>
       parseInterpolatorElement(element, null);
+
+  static XmlDocument serializeDocument(Interpolator interpolator) {
+    final builder = XmlBuilder();
+    serializeElement(builder, interpolator);
+    return builder.buildDocument();
+  }
+
+  static void serializeElement(XmlBuilder b, Interpolator interpolator) =>
+      serializeInterpolator(b, interpolator);
+
   double transform(double t);
 }
 

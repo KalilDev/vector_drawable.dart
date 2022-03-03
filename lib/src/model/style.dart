@@ -28,6 +28,12 @@ class StyleOr<T> with Diagnosticable implements StyleResolvable<T> {
 
   @override
   T? resolve(StyleResolver resolver) => value ?? resolver.resolve(styled!);
+
+  static String defaultStringifyValue(Object? o) => o.toString();
+  String stringify([
+    String Function(T) stringifyValue = defaultStringifyValue,
+  ]) =>
+      styled != null ? styled.toString() : stringifyValue(value!);
 }
 
 class StyleProperty {
@@ -51,4 +57,5 @@ class StyleProperty {
       other is StyleProperty &&
       other.namespace == namespace &&
       other.name == name;
+  String toString() => '?${namespace.isEmpty ? '' : '$namespace:'}$name';
 }

@@ -3,6 +3,7 @@ import 'package:xml/xml.dart';
 import 'package:path_parsing/path_parsing.dart';
 
 import '../parsing/animated_vector_drawable.dart';
+import '../serializing/animated_vector_drawable.dart';
 import 'animation.dart';
 import 'resource.dart';
 import 'vector_drawable.dart';
@@ -18,6 +19,16 @@ class AnimatedVectorDrawable extends Resource
       parseAnimatedVectorDrawable(document.rootElement, source);
   static AnimatedVectorDrawable parseElement(XmlElement document) =>
       parseAnimatedVectorDrawable(document, null);
+
+  static XmlDocument serializeDocument(AnimatedVectorDrawable animation) {
+    final builder = XmlBuilder();
+    serializeElement(builder, animation);
+    return builder.buildDocument();
+  }
+
+  static void serializeElement(
+          XmlBuilder b, AnimatedVectorDrawable animation) =>
+      serializeAnimatedVectorDrawable(b, animation);
 
   @override
   AnimatedVectorDrawable clone() =>

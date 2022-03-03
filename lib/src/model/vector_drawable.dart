@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:vector_drawable/src/model/path.dart';
 import 'package:vector_drawable/src/model/style.dart';
+import 'package:vector_drawable/src/serializing/vector_drawable.dart';
 import 'package:xml/xml.dart';
 import 'package:path_parsing/path_parsing.dart';
 import 'package:path_parsing/src/path_segment_type.dart';
@@ -34,6 +35,15 @@ class VectorDrawable extends Resource {
       parseVectorDrawable(document.rootElement, source);
   static VectorDrawable parseElement(XmlElement element) =>
       parseVectorDrawable(element, null);
+
+  static XmlDocument serializeDocument(VectorDrawable drawable) {
+    final builder = XmlBuilder();
+    serializeElement(builder, drawable);
+    return builder.buildDocument();
+  }
+
+  static void serializeElement(XmlBuilder b, VectorDrawable drawable) =>
+      serializeVectorDrawable(b, drawable);
 }
 
 // https://developer.android.com/reference/android/graphics/drawable/VectorDrawable
