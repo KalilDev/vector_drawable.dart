@@ -12,6 +12,7 @@ import 'src/interpolation.dart';
 import 'vector.dart';
 import '../model/animated_vector_drawable.dart';
 import '../model/animation.dart';
+import 'package:value_notifier/value_notifier.dart';
 
 class _StartOffsetAndThemableAttributes {
   final int startOffset;
@@ -22,7 +23,7 @@ class _StartOffsetAndThemableAttributes {
 
 class AnimationStyleResolver extends StyleMapping with DiagnosticableTreeMixin {
   final StyleMapping parentResolver;
-  final List<StyleResolvable<Object>> properties;
+  final List<StyleResolvable<Object>?> properties;
 
   AnimationStyleResolver(
     this.parentResolver,
@@ -37,7 +38,11 @@ class AnimationStyleResolver extends StyleMapping with DiagnosticableTreeMixin {
       return parentResolver.resolve(property);
     }
     final index = int.parse(property.name);
-    return resolveStyledAs(properties[index], parentResolver) as T;
+    final prop = properties[index];
+    if (prop == null) {
+      return null;
+    }
+    return resolveStyledAs(prop, parentResolver) as T;
   }
 
   @override
@@ -50,8 +55,9 @@ class AnimationStyleResolver extends StyleMapping with DiagnosticableTreeMixin {
       prop.namespace == kNamespace || parentResolver.contains(prop);
 
   @override
-  List<DiagnosticsNode> debugDescribeChildren() =>
-      properties.map((e) => e.toDiagnosticsNode()).toList();
+  List<DiagnosticsNode> debugDescribeChildren() => properties
+      .map((e) => e?.toDiagnosticsNode() ?? DiagnosticsProperty('prop', null))
+      .toList();
 
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
@@ -65,9 +71,11 @@ class AnimatedVectorWidget extends StatefulWidget {
     Key? key,
     required this.animatedVector,
     this.styleMapping = StyleMapping.empty,
+    this.onStatusChange,
   }) : super(key: key);
   final AnimatedVector animatedVector;
   final StyleMapping styleMapping;
+  final ValueChanged<AnimatorStatus>? onStatusChange;
 
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
@@ -119,6 +127,7 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
   late Map<String, VectorDrawableNode> namedBaseElements;
   // owns all other animators
   late AnimatorSet root;
+  late IDisposable _animatorStatusListener;
   final Map<VectorDrawableNode, _StartOffsetAndThemableAttributes>
       _nodePropsMap = {};
   int startOffset = 0;
@@ -130,8 +139,11 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
     propsLength = 0;
     targetAnimators.clear();
     root.dispose();
+    _animatorStatusListener.dispose();
     _currentVector = null;
   }
+
+  void _onStatus(AnimatorStatus status) => widget.onStatusChange?.call(status);
 
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
@@ -154,6 +166,7 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
     root = widget.animatedVector.children.isEmpty
         ? EmptyAnimatorSet()
         : _createTargetAnimators(_namedBaseVectorElements(base));
+    _animatorStatusListener = root.status.unique().tap(_onStatus);
     animatable = _buildAnimatableVector();
     _currentVector = vector;
   }
@@ -207,7 +220,7 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
   }
 
   void dispose() {
-    root.dispose();
+    _removeStuffFromOldVector();
     super.dispose();
   }
 
@@ -221,16 +234,21 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
     return animator.nonUniqueAnimatedAttributes.toSet().toList();
   }
 
-  Iterable<StyleResolvable<Object>> _dynamicPropsFrom(
+  Iterable<StyleResolvable<Object>?> _dynamicPropsFrom(
     VectorDrawableNode node,
     AnimatorWithValues animator,
     List<String> themableAttrs,
   ) {
     final props = animator.values;
     return themableAttrs.map(
-      (prop) =>
-          props[prop] ??
-          SingleStyleResolvable(node.getThemeableAttribute(prop)!),
+      (prop) {
+        final themable = props[prop];
+        if (themable == null) {
+          final base = node.getThemeableAttribute(prop);
+          return base == null ? null : SingleStyleResolvable<Object>(base);
+        }
+        return themable;
+      },
     );
   }
 
@@ -363,6 +381,10 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
     return RawVectorWidget(
       vector: animatable,
       styleMapping: resolver,
+      cachingStrategy: (root.status.value == AnimatorStatus.forward ||
+              root.status.value == AnimatorStatus.reverse)
+          ? RenderVectorCachingStrategy.none
+          : RenderVectorCachingStrategy.groupAndPath,
     );
   }
 
@@ -374,7 +396,6 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
       animation: changes,
       builder: (context, _) {
         final styleResolver = _buildDynamicStyleResolver(styleMapping);
-        //debugger();
         return _buildVectorWidget(
           context,
           styleResolver,
