@@ -8,6 +8,7 @@ import 'package:vector_drawable/src/widget/src/util.dart';
 import 'package:vector_drawable/vector_drawable.dart';
 
 import 'animator.dart';
+import 'object.dart';
 
 abstract class AnimatorSet extends AnimatorWithValues
     with DiagnosticableTreeMixin {
@@ -85,13 +86,8 @@ class SequentialAnimatorSet extends AnimatorSet {
     }
     for (final animation in forward ? children : children.reversed) {
       _current.value = animation;
-      final startTime = DateTime.now();
-      print('$startTime Starting $animation');
       try {
         await animation.start(forward: forward, fromStart: fromStart);
-        final finishTime = DateTime.now();
-        print(
-            '$finishTime Finished $animation, took ${finishTime.difference(startTime).inMilliseconds}ms');
       } on TickerCanceled {
         break;
       }
@@ -117,29 +113,39 @@ class SequentialAnimatorSet extends AnimatorSet {
 
   @override
   Map<String, StyleResolvable<Object>> get values {
-    final current = _current.value;
-    bool didPassCurrent = false;
-    final result = <String, StyleResolvable<Object>>{};
-    for (final child in children) {
-      if (didPassCurrent || child.status.value == AnimatorStatus.delay) {
-        // Only add if the value was not present
-        final vs = child.values;
-        for (final key in vs.keys) {
-          if (result.containsKey(key)) {
-            continue;
-          }
-          result[key] = vs[key]!;
-        }
-      } else {
-        // Add everything
-        final vs = child.values;
-        result.addAll(vs);
-      }
-      if (child == current) {
-        didPassCurrent = true;
-      }
+    final finishedState = status.value == AnimatorStatus.forward
+        ? AnimatorStatus.completed
+        : status.value == AnimatorStatus.reverse
+            ? AnimatorStatus.dismissed
+            : status.value;
+    final delayed = <String, StyleResolvable<Object>>{};
+    for (final delayedChild
+        in children.where((e) => e.status.value == AnimatorStatus.delay)) {
+      final childValues = delayedChild.values;
+      for (final key in childValues.keys)
+        delayed.putIfAbsent(key, () => childValues[key]!);
     }
-    return result;
+    final finished = <String, StyleResolvable<Object>>{};
+    // Walk the children backwards in the finish order
+    for (final finishedChild
+        in (children.where((e) => e.status.value == finishedState).toList()
+          ..sort(_byLargestDuration))) {
+      final childValues = finishedChild.values;
+      for (final key in childValues.keys)
+        finished.putIfAbsent(key, () => childValues[key]!);
+    }
+    final active = <String, StyleResolvable<Object>>{};
+    for (final activeChild
+        in children.where((e) => e.status.value == status.value)) {
+      final childValues = activeChild.values;
+      for (final key in childValues.keys)
+        active.putIfAbsent(key, () => childValues[key]!);
+    }
+    return {
+      for (final key
+          in active.keys.followedBy(finished.keys).followedBy(delayed.keys))
+        key: (active[key] ?? finished[key] ?? delayed[key])!,
+    };
   }
 }
 
@@ -163,6 +169,18 @@ class EmptyAnimatorSet extends AnimatorSet {
   Map<String, StyleResolvable<Object>> get values => const {};
 }
 
+int _sortBySmallestStartDelay(AnimatorWithValues a, AnimatorWithValues b) {
+  Duration aDelay = a is ObjectAnimator ? a.startDelay : Duration.zero;
+  Duration bDelay = b is ObjectAnimator ? b.startDelay : Duration.zero;
+  return aDelay.compareTo(bDelay);
+}
+
+int _byLargestDuration(AnimatorWithValues a, AnimatorWithValues b) {
+  Duration aDuration = a.totalDuration;
+  Duration bDuration = b.totalDuration;
+  return aDuration.compareTo(bDuration);
+}
+
 class TogetherAnimatorSet extends AnimatorSet {
   final AnimatorWithValues _longest;
   final ValueNotifier<AnimatorStatus> _status;
@@ -171,7 +189,7 @@ class TogetherAnimatorSet extends AnimatorSet {
       : _longest = children
             .reduce((a, b) => a.totalDuration > b.totalDuration ? a : b),
         _status = ValueNotifier(AnimatorStatus.dismissed),
-        super._(children);
+        super._(children.toList()..sort(_sortBySmallestStartDelay));
   @override
   Future<void> start({bool forward = true, bool fromStart = false}) async {
     _status.value = forward ? AnimatorStatus.forward : AnimatorStatus.reverse;
@@ -205,25 +223,38 @@ class TogetherAnimatorSet extends AnimatorSet {
 
   @override
   Map<String, StyleResolvable<Object>> get values {
-    final result = <String, StyleResolvable<Object>>{};
-    for (final child
-        in children.where((child) => child.status.value == _status.value)) {
-      // Add everything
-      final vs = child.values;
-      result.addAll(vs);
+    final finishedState = _status.value == AnimatorStatus.forward
+        ? AnimatorStatus.completed
+        : _status.value == AnimatorStatus.reverse
+            ? AnimatorStatus.dismissed
+            : _status.value;
+    final delayed = <String, StyleResolvable<Object>>{};
+    for (final delayedChild
+        in children.where((e) => e.status.value == AnimatorStatus.delay)) {
+      final childValues = delayedChild.values;
+      for (final key in childValues.keys)
+        delayed.putIfAbsent(key, () => childValues[key]!);
     }
-
-    /*for (final child
-        in children.where((child) => child.status.value != _status.value)) {
-      // Only add if the value was not present
-      final vs = child.values;
-      for (final key in vs.keys) {
-        if (result.containsKey(key)) {
-          continue;
-        }
-        result[key] = vs[key]!;
-      }
-    }*/
-    return result;
+    final finished = <String, StyleResolvable<Object>>{};
+    // Walk the children backwards in the finish order
+    for (final finishedChild
+        in (children.where((e) => e.status.value == finishedState).toList()
+          ..sort(_byLargestDuration))) {
+      final childValues = finishedChild.values;
+      for (final key in childValues.keys)
+        finished.putIfAbsent(key, () => childValues[key]!);
+    }
+    final active = <String, StyleResolvable<Object>>{};
+    for (final activeChild
+        in children.where((e) => e.status.value == _status.value)) {
+      final childValues = activeChild.values;
+      for (final key in childValues.keys)
+        active.putIfAbsent(key, () => childValues[key]!);
+    }
+    return {
+      for (final key
+          in active.keys.followedBy(finished.keys).followedBy(delayed.keys))
+        key: (active[key] ?? finished[key] ?? delayed[key])!,
+    };
   }
 }

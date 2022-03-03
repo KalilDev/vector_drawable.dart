@@ -77,15 +77,12 @@ class ObjectAnimator extends AnimatorWithValues with Diagnosticable {
     if (fromStart) {
       controller.value = start;
     }
-    print(animation.repeatCount);
     final repetitionCount =
         animation.repeatCount == -1.0 ? double.infinity : animation.repeatCount;
     for (var animatedCount = 0;
         animatedCount < repetitionCount + 1;
         animatedCount++) {
       await controller.animateTo(end).catchError(ignore);
-      print(repetitionCount);
-      print(animatedCount);
       if (animatedCount == repetitionCount) {
         break;
       }
