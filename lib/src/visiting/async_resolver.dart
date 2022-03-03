@@ -15,145 +15,115 @@ abstract class AsyncResourceResolver {
   Future<void> resolveMany(Iterable<ResourceOrReference> reference);
 }
 
-R _walkAnimationNode<R>(
+Iterable<R> _walkAnimationNode<R>(
   AnimationNode animation, {
   required R Function(AnimationSet) onAnimationSet,
   required R Function(ObjectAnimation) onObjectAnimation,
-  required R Function(R, R) reducer,
-}) =>
-    animation is AnimationSet
-        ? reducer(
-            onAnimationSet(animation),
-            animation.children
-                .map(
-                  (node) => _walkAnimationNode(
-                    node,
-                    onAnimationSet: onAnimationSet,
-                    onObjectAnimation: onObjectAnimation,
-                    reducer: reducer,
-                  ),
-                )
-                .reduce(reducer),
-          )
-        : animation is ObjectAnimation
-            ? onObjectAnimation(animation)
-            : throw TypeError();
+}) sync* {
+  if (animation is AnimationSet) {
+    yield onAnimationSet(animation);
+    for (final node in animation.children) {
+      yield* _walkAnimationNode(
+        node,
+        onAnimationSet: onAnimationSet,
+        onObjectAnimation: onObjectAnimation,
+      );
+    }
+  } else if (animation is ObjectAnimation) {
+    yield onObjectAnimation(animation);
+  } else {
+    throw TypeError();
+  }
+}
 
-R walkAnimationResource<R>(
+Iterable<R> walkAnimationResource<R>(
   AnimationResource animation, {
   required R Function(AnimationResource) onAnimationResource,
   required R Function(AnimationSet) onAnimationSet,
   required R Function(ObjectAnimation) onObjectAnimation,
-  required R Function(R, R) reducer,
-}) =>
-    reducer(
-      onAnimationResource(animation),
-      _walkAnimationNode(
-        animation.body,
-        onAnimationSet: onAnimationSet,
-        onObjectAnimation: onObjectAnimation,
-        reducer: reducer,
-      ),
-    );
-R _walkVectorPart<R>(
+}) sync* {
+  yield onAnimationResource(animation);
+  yield* _walkAnimationNode(
+    animation.body,
+    onAnimationSet: onAnimationSet,
+    onObjectAnimation: onObjectAnimation,
+  );
+}
+
+Iterable<R> _walkVectorPart<R>(
   VectorPart part, {
   required R Function(Path) onPath,
   required R Function(Group) onGroup,
   required R Function(ClipPath) onClipPath,
-  required R Function(R, R) reducer,
-}) =>
-    part is Path
-        ? onPath(part)
-        : part is Group
-            ? reducer(
-                onGroup(part),
-                part.children
-                    .map((e) => _walkVectorPart(
-                          part,
-                          onPath: onPath,
-                          onGroup: onGroup,
-                          onClipPath: onClipPath,
-                          reducer: reducer,
-                        ))
-                    .reduce(reducer))
-            : part is ClipPath
-                ? reducer(
-                    onClipPath(part),
-                    part.children
-                        .map((e) => _walkVectorPart(
-                              part,
-                              onPath: onPath,
-                              onGroup: onGroup,
-                              onClipPath: onClipPath,
-                              reducer: reducer,
-                            ))
-                        .reduce(reducer))
-                : throw TypeError();
-R walkVectorDrawable<R>(
+}) sync* {
+  if (part is Path) {
+    yield onPath(part);
+  } else if (part is Group) {
+    yield onGroup(part);
+    for (final part in part.children) {
+      yield* _walkVectorPart(
+        part,
+        onPath: onPath,
+        onGroup: onGroup,
+        onClipPath: onClipPath,
+      );
+    }
+  } else if (part is ClipPath) {
+    yield onClipPath(part);
+    for (final part in part.children) {
+      yield* _walkVectorPart(
+        part,
+        onPath: onPath,
+        onGroup: onGroup,
+        onClipPath: onClipPath,
+      );
+    }
+  } else {
+    throw TypeError();
+  }
+}
+
+Iterable<R> walkVectorDrawable<R>(
   VectorDrawable vector, {
   required R Function(VectorDrawable) onVectorDrawable,
   required R Function(Vector) onVector,
   required R Function(Path) onPath,
   required R Function(Group) onGroup,
   required R Function(ClipPath) onClipPath,
-  required R Function(R, R) reducer,
-}) =>
-    reducer(
-        onVectorDrawable(vector),
-        reducer(
-          onVector(vector.body),
-          vector.body.children
-              .map((part) => _walkVectorPart(
-                    part,
-                    onPath: onPath,
-                    onGroup: onGroup,
-                    onClipPath: onClipPath,
-                    reducer: reducer,
-                  ))
-              .reduce(reducer),
-        ));
+}) sync* {
+  yield onVectorDrawable(vector);
+  yield onVector(vector.body);
+  for (final part in vector.body.children) {
+    yield* _walkVectorPart(
+      part,
+      onPath: onPath,
+      onGroup: onGroup,
+      onClipPath: onClipPath,
+    );
+  }
+}
 
-R walkAnimatedVector<R>(
+Iterable<R> walkAnimatedVector<R>(
   AnimatedVector vector, {
   required R Function(AnimatedVector) onAnimatedVector,
   required R Function(ResourceOrReference<VectorDrawable>) onDrawable,
   required R Function(ResourceOrReference<AnimationResource>) onAnimation,
   required R Function(Target) onTarget,
-  required R Function(R, R) reducer,
-}) =>
-    reducer(
-      onAnimatedVector(vector),
-      reducer(
-        onDrawable(vector.drawable),
-        vector.children
-            .map(
-              (target) => reducer(
-                onTarget(target),
-                onAnimation(target.animation),
-              ),
-            )
-            .reduce(reducer),
-      ),
-    );
+}) sync* {
+  yield onAnimatedVector(vector);
+  yield onDrawable(vector.drawable);
+  for (final target in vector.children) {
+    yield onTarget(target);
+    yield onAnimation(target.animation);
+  }
+}
+
 Iterable<T> _empty<T>(_) => <T>[];
-Iterable<ResourceOrReference> findAllUnresolvedReferencesInVectorDrawable(
-  VectorDrawable vec,
-) =>
-    walkVectorDrawable(
-      vec,
-      onVectorDrawable: _empty,
-      onVector: _empty,
-      onPath: _empty,
-      onGroup: _empty,
-      onClipPath: _empty,
-      reducer: (a, b) => a.followedBy(b),
-    );
 Iterable<ResourceOrReference> findAllUnresolvedReferencesInAnimationResource(
   AnimationResource anim,
 ) =>
-    walkAnimationResource(
+    walkAnimationResource<Iterable<ResourceOrReference>>(
       anim,
-      reducer: (a, b) => a.followedBy(b),
       onAnimationResource: _empty,
       onAnimationSet: _empty,
       onObjectAnimation: (e) => <ResourceOrReference>[
@@ -165,19 +135,16 @@ Iterable<ResourceOrReference> findAllUnresolvedReferencesInAnimationResource(
                 .whereType() ??
             [])
       ].where((e) => !e.isResolved),
-    );
+    ).expand((e) => e);
 Iterable<ResourceOrReference> findAllUnresolvedReferencesInAnimatedVector(
   AnimatedVector vec,
 ) =>
-    walkAnimatedVector(
+    walkAnimatedVector<Iterable<ResourceOrReference>>(
       vec,
       onAnimatedVector: _empty,
-      onDrawable: (d) => d.isResolved
-          ? findAllUnresolvedReferencesInVectorDrawable(d.resource!)
-          : [d],
+      onDrawable: (d) => d.isResolved ? [] : [d],
       onAnimation: (d) => d.isResolved
           ? findAllUnresolvedReferencesInAnimationResource(d.resource!)
           : [d],
       onTarget: _empty,
-      reducer: (a, b) => a.followedBy(b),
-    );
+    ).expand((e) => e);
