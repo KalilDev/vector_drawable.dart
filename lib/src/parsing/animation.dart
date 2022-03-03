@@ -51,7 +51,7 @@ Keyframe _parseKeyframe(XmlElement node) {
     value: node
         .getAndroidAttribute('value')!
         .map((v) => _parseValue(v, valueType)),
-    fraction: node.getAndroidAttribute('propertyName')!.map(double.parse),
+    fraction: node.getAndroidAttribute('fraction')!.map(double.parse),
     interpolator: node.inlineResourceOrAttribute(
       'interpolator',
       namespace: kAndroidXmlNamespace,
