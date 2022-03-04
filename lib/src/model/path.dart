@@ -95,13 +95,12 @@ class PathData {
     // Parse each segment individually, appending an close segment in case an
     // error occurs.
     final result = <PathSegmentData>[];
-    try {
       while (parser.hasMoreData) {
+      try {
         result.add(parser.parseSegment());
-      }
     } catch (e) {
       print(e);
-      result.add(PathSegmentData()..command = SvgPathSegType.close);
+      }
     }
     return result;
   }
