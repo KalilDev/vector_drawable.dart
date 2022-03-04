@@ -28,7 +28,7 @@ Vector _parseVector(XmlElement node) {
     height: _parseDimension(node.getAndroidAttribute('height')!),
     viewportWidth: double.parse(node.getAndroidAttribute('viewportWidth')!),
     viewportHeight: double.parse(node.getAndroidAttribute('viewportHeight')!),
-    tint: node.getStyleOrAndroidAttribute('tint', parse: parseHexColor),
+    tint: node.getStyleOrAndroidAttribute('tint', parse: parseHexColor, defaultValue: Colors.transparent)!,
     tintMode: node.getAndroidAttribute('tintMode')?.map(_parseTintMode) ??
         BlendMode.srcIn,
     autoMirrored:
@@ -52,15 +52,15 @@ Group? _parseGroup(XmlElement node) {
 
   return Group(
     name: node.getAndroidAttribute('name'),
-    rotation: node.getStyleOrAndroidAttribute('rotation', parse: double.parse),
-    pivotX: node.getStyleOrAndroidAttribute('pivotX', parse: double.parse),
-    pivotY: node.getStyleOrAndroidAttribute('pivotY', parse: double.parse),
-    scaleX: node.getStyleOrAndroidAttribute('scaleX', parse: double.parse),
-    scaleY: node.getStyleOrAndroidAttribute('scaleY', parse: double.parse),
+    rotation: node.getStyleOrAndroidAttribute('rotation', parse: double.parse,defaultValue: 0.0)!,
+    pivotX: node.getStyleOrAndroidAttribute('pivotX', parse: double.parse,defaultValue: 0.0)!,
+    pivotY: node.getStyleOrAndroidAttribute('pivotY', parse: double.parse,defaultValue: 0.0)!,
+    scaleX: node.getStyleOrAndroidAttribute('scaleX', parse: double.parse,defaultValue:1.0)!,
+    scaleY: node.getStyleOrAndroidAttribute('scaleY', parse: double.parse,defaultValue: 1.0)!,
     translateX:
-        node.getStyleOrAndroidAttribute('translateX', parse: double.parse),
+        node.getStyleOrAndroidAttribute('translateX', parse: double.parse,defaultValue: 0.0)!,
     translateY:
-        node.getStyleOrAndroidAttribute('translateY', parse: double.parse),
+        node.getStyleOrAndroidAttribute('translateY', parse: double.parse,defaultValue: 0.0)!,
     children: node.childElements
         .map(_parseVectorPart)
         .whereType<VectorPart>()
@@ -99,9 +99,9 @@ Path? _parsePath(XmlElement node) {
     pathData: node.getStyleOrAndroidAttribute('pathData',
         parse: PathData.fromString)!,
     fillColor:
-        node.getStyleOrAndroidAttribute('fillColor', parse: parseHexColor),
+        node.getStyleOrAndroidAttribute('fillColor', parse: parseHexColor,defaultValue: Colors.transparent)!,
     strokeColor:
-        node.getStyleOrAndroidAttribute('strokeColor', parse: parseHexColor),
+        node.getStyleOrAndroidAttribute('strokeColor', parse: parseHexColor,defaultValue: Colors.transparent)!,
     strokeWidth: node.getStyleOrAndroidAttribute(
       'strokeWidth',
       parse: double.parse,
