@@ -67,7 +67,7 @@ class Vector extends VectorDrawableNode with DiagnosticableTreeMixin {
   final Dimension height;
   final double viewportWidth;
   final double viewportHeight;
-  final StyleOr<Color>? tint;
+  final StyleOr<Color> tint;
   final BlendMode tintMode;
   final bool autoMirrored;
   final StyleOr<double> opacity;
@@ -79,7 +79,7 @@ class Vector extends VectorDrawableNode with DiagnosticableTreeMixin {
     required this.height,
     required this.viewportWidth,
     required this.viewportHeight,
-    required this.tint,
+    this.tint = const StyleOr.value(Colors.transparent),
     this.tintMode = BlendMode.srcIn,
     this.autoMirrored = false,
     this.opacity = const StyleOr.value(1.0),
@@ -115,7 +115,7 @@ class Vector extends VectorDrawableNode with DiagnosticableTreeMixin {
 
   @override
   Iterable<StyleProperty> get _localUsedStyles => [
-        if (tint?.styled != null) tint!.styled!,
+        if (tint.styled != null) tint.styled!,
         if (opacity.styled != null) opacity.styled!,
       ];
 }
@@ -150,24 +150,24 @@ class ClipPath extends VectorPart with DiagnosticableTreeMixin {
 }
 
 class Group extends VectorPart with DiagnosticableTreeMixin {
-  final StyleOr<double>? rotation;
-  final StyleOr<double>? pivotX;
-  final StyleOr<double>? pivotY;
-  final StyleOr<double>? scaleX;
-  final StyleOr<double>? scaleY;
-  final StyleOr<double>? translateX;
-  final StyleOr<double>? translateY;
+  final StyleOr<double> rotation;
+  final StyleOr<double> pivotX;
+  final StyleOr<double> pivotY;
+  final StyleOr<double> scaleX;
+  final StyleOr<double> scaleY;
+  final StyleOr<double> translateX;
+  final StyleOr<double> translateY;
   final List<VectorPart> children;
 
   Group({
     required String? name,
-    required this.rotation,
-    required this.pivotX,
-    required this.pivotY,
-    required this.scaleX,
-    required this.scaleY,
-    required this.translateX,
-    required this.translateY,
+    this.rotation= const StyleOr.value(0.0),
+    this.pivotX= const StyleOr.value(0.0),
+    this.pivotY= const StyleOr.value(0.0),
+    this.scaleX= const StyleOr.value(1.0),
+    this.scaleY= const StyleOr.value(1.0),
+    this.translateX= const StyleOr.value(0.0),
+    this.translateY = const StyleOr.value(0.0),
     required this.children,
   }) : super(name: name);
 
@@ -178,13 +178,14 @@ class Group extends VectorPart with DiagnosticableTreeMixin {
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
-    properties.add(DiagnosticsProperty('rotation', rotation));
-    properties.add(DiagnosticsProperty('pivotX', pivotX));
-    properties.add(DiagnosticsProperty('pivotY', pivotY));
-    properties.add(DiagnosticsProperty('scaleX', scaleX));
-    properties.add(DiagnosticsProperty('scaleY', scaleY));
-    properties.add(DiagnosticsProperty('translateX', translateX));
-    properties.add(DiagnosticsProperty('translateY', translateY));
+    properties.add(DiagnosticsProperty('name', name));
+    properties.add(DiagnosticsProperty('rotation', rotation, defaultValue: const StyleOr.value(0.0)));
+    properties.add(DiagnosticsProperty('pivotX', pivotX, defaultValue: const StyleOr.value(0.0)));
+    properties.add(DiagnosticsProperty('pivotY', pivotY, defaultValue: const StyleOr.value(0.0)));
+    properties.add(DiagnosticsProperty('scaleX', scaleX, defaultValue: const StyleOr.value(1.0)));
+    properties.add(DiagnosticsProperty('scaleY', scaleY, defaultValue: const StyleOr.value(1.0)));
+    properties.add(DiagnosticsProperty('translateX', translateX, defaultValue: const StyleOr.value(0.0)));
+    properties.add(DiagnosticsProperty('translateY', translateY, defaultValue: const StyleOr.value(0.0)));
   }
 
   @override
@@ -192,13 +193,13 @@ class Group extends VectorPart with DiagnosticableTreeMixin {
       _localUsedStyles.followedBy(children.expand((e) => e._usedStyles));
   @override
   Iterable<StyleProperty> get _localUsedStyles => [
-        if (rotation?.styled != null) rotation!.styled!,
-        if (pivotX?.styled != null) pivotX!.styled!,
-        if (pivotY?.styled != null) pivotY!.styled!,
-        if (scaleX?.styled != null) scaleX!.styled!,
-        if (scaleY?.styled != null) scaleY!.styled!,
-        if (translateX?.styled != null) translateX!.styled!,
-        if (translateY?.styled != null) translateY!.styled!,
+        if (rotation.styled != null) rotation.styled!,
+        if (pivotX.styled != null) pivotX.styled!,
+        if (pivotY.styled != null) pivotY.styled!,
+        if (scaleX.styled != null) scaleX.styled!,
+        if (scaleY.styled != null) scaleY.styled!,
+        if (translateX.styled != null) translateX.styled!,
+        if (translateY.styled != null) translateY.styled!,
       ];
 }
 
@@ -216,8 +217,8 @@ enum StrokeLineJoin {
 
 class Path extends VectorPart with Diagnosticable {
   final StyleOr<PathData> pathData;
-  final StyleOr<Color>? fillColor;
-  final StyleOr<Color>? strokeColor;
+  final StyleOr<Color> fillColor;
+  final StyleOr<Color> strokeColor;
   final StyleOr<double> strokeWidth;
   final StyleOr<double> strokeAlpha;
   final StyleOr<double> fillAlpha;
@@ -232,8 +233,8 @@ class Path extends VectorPart with Diagnosticable {
   Path({
     required String? name,
     required this.pathData,
-    required this.fillColor,
-    required this.strokeColor,
+    this.fillColor = const StyleOr.value(Colors.transparent),
+    this.strokeColor= const StyleOr.value(Colors.transparent),
     this.strokeWidth = const StyleOr.value(0),
     this.strokeAlpha = const StyleOr.value(1),
     this.fillAlpha = const StyleOr.value(1),
@@ -251,20 +252,20 @@ class Path extends VectorPart with Diagnosticable {
     super.debugFillProperties(properties);
     properties.add(StringProperty('name', name));
     properties.add(DiagnosticsProperty('pathData', pathData));
-    properties.add(DiagnosticsProperty('fillColor', fillColor));
-    properties.add(DiagnosticsProperty('strokeColor', strokeColor));
+    properties.add(DiagnosticsProperty('fillColor', fillColor,defaultValue: const StyleOr.value(Colors.transparent)));
+    properties.add(DiagnosticsProperty('strokeColor', strokeColor, defaultValue: const StyleOr.value(Colors.transparent)));
     properties
-        .add(DiagnosticsProperty('strokeWidth', strokeWidth, defaultValue: 0));
+        .add(DiagnosticsProperty('strokeWidth', strokeWidth, defaultValue: const StyleOr.value(0)));
     properties
-        .add(DiagnosticsProperty('strokeAlpha', strokeAlpha, defaultValue: 1));
+        .add(DiagnosticsProperty('strokeAlpha', strokeAlpha, defaultValue: const StyleOr.value(0)));
     properties
-        .add(DiagnosticsProperty('fillAlpha', fillAlpha, defaultValue: 1));
+        .add(DiagnosticsProperty('fillAlpha', fillAlpha, defaultValue: const StyleOr.value(1)));
     properties.add(
-        DiagnosticsProperty('trimPathStart', trimPathStart, defaultValue: 0));
+        DiagnosticsProperty('trimPathStart', trimPathStart, defaultValue: const StyleOr.value(0)));
     properties
-        .add(DiagnosticsProperty('trimPathEnd', trimPathEnd, defaultValue: 1));
+        .add(DiagnosticsProperty('trimPathEnd', trimPathEnd, defaultValue: const StyleOr.value(1)));
     properties.add(
-        DiagnosticsProperty('trimPathOffset', trimPathOffset, defaultValue: 0));
+        DiagnosticsProperty('trimPathOffset', trimPathOffset, defaultValue: const StyleOr.value(0)));
     properties.add(EnumProperty('strokeLineCap', strokeLineCap,
         defaultValue: StrokeLineCap.butt));
     properties.add(EnumProperty('strokeLineJoin', strokeLineJoin,
@@ -280,8 +281,8 @@ class Path extends VectorPart with Diagnosticable {
   @override
   Iterable<StyleProperty> get _usedStyles => [
         if (pathData.styled != null) pathData.styled!,
-        if (fillColor?.styled != null) fillColor!.styled!,
-        if (strokeColor?.styled != null) strokeColor!.styled!,
+        if (fillColor.styled != null) fillColor.styled!,
+        if (strokeColor.styled != null) strokeColor.styled!,
         if (strokeWidth.styled != null) strokeWidth.styled!,
         if (strokeAlpha.styled != null) strokeAlpha.styled!,
         if (fillAlpha.styled != null) fillAlpha.styled!,
