@@ -5,104 +5,61 @@ import 'package:vector_drawable/src/model/style.dart';
 import 'package:vector_drawable/src/model/vector_drawable.dart';
 import 'package:vector_drawable/src/widget/src/animator/animator.dart';
 import 'package:vector_drawable/src/widget/src/attributes.dart';
-import 'package:value_notifier/value_notifier.dart';
 import '../interpolation.dart';
-import '../util.dart';
 
-class ObjectAnimator extends AnimatorWithValues with Diagnosticable {
+class ObjectAnimator extends Animator with Diagnosticable {
   final ObjectAnimation animation;
   final ObjectAnimatorTween tween;
-  final AnimationController controller;
+  final Duration duration;
   final Duration startDelay;
-  final ValueNotifier<AnimatorStatus> _status;
 
   ObjectAnimator._({
-    required this.startDelay,
     required this.animation,
     required this.tween,
-    required this.controller,
-  }) : _status =
-            ValueNotifier(animationStatusToAnimatorStatus(controller.status)) {
-    controller.addStatusListener(_onControllerStatus);
-  }
-  void _onControllerStatus(AnimationStatus status) {
-    _status.value = animationStatusToAnimatorStatus(status);
-  }
+    required this.duration,
+    required this.startDelay,
+  });
 
   factory ObjectAnimator.from({
     required VectorDrawableNode target,
     required ObjectAnimation animation,
-    required TickerProvider vsync,
   }) {
-    final controller = AnimationController(
-      vsync: vsync,
-      duration: Duration(milliseconds: animation.duration),
-    );
     return ObjectAnimator._(
-      startDelay: Duration(milliseconds: animation.startOffset),
       animation: animation,
-      controller: controller,
       tween: ObjectAnimatorTween(
         animation,
         (name) => target.getThemeableAttribute(name)!,
       ),
+      duration: Duration(milliseconds: animation.duration),
+      startDelay: Duration(milliseconds: animation.startOffset),
     );
   }
 
-  Map<String, StyleResolvable<Object>> get values =>
-      tween.lerp(controller.value);
-
-  void dispose() {
-    _status.dispose();
-    controller.dispose();
-  }
+  @override
+  Map<String, StyleResolvable<Object>> values(Duration timeFromStart) =>
+      tween.lerp(t(timeFromStart));
 
   @override
-  void reset({bool toFinish = false}) {
-    controller.reset();
-    if (toFinish) {
-      controller.value = 1;
+  AnimatorStatus status(Duration timeFromStart) {
+    if (timeFromStart > totalDuration) {
+      return AnimatorStatus.completed;
     }
-  }
-
-  @override
-  Future<void> start({bool forward = true, bool fromStart = false}) async {
-    if (startDelay != Duration.zero) {
-      _status.value = AnimatorStatus.delay;
-      // TODO: cancel?
-      await Future.delayed(startDelay);
+    if (timeFromStart == Duration.zero) {
+      return AnimatorStatus.dismissed;
     }
-    final start = forward ? 0.0 : 1.0;
-    final end = forward ? 1.0 : 0.0;
-    if (fromStart) {
-      controller.value = start;
+    if (timeFromStart <= startDelay) {
+      return AnimatorStatus.delay;
     }
-    final repetitionCount =
-        animation.repeatCount == -1.0 ? double.infinity : animation.repeatCount;
-    for (var animatedCount = 0;
-        animatedCount < repetitionCount + 1;
-        animatedCount++) {
-      await controller.animateTo(end).catchError(ignore);
-      if (animatedCount == repetitionCount) {
-        break;
-      }
-      if (animation.repeatMode == RepeatMode.reverse) {
-        await controller.animateTo(start).catchError(ignore);
-      } else {
-        controller.value = start;
+    timeFromStart -= startDelay;
+    if (animation.repeatMode == RepeatMode.reverse) {
+      // each repeat takes 2 cycles.
+      final cycleDuration = 2 * duration.inMicroseconds;
+      final t = (timeFromStart.inMicroseconds % cycleDuration) / cycleDuration;
+      if (t > 0.5) {
+        return AnimatorStatus.reverse;
       }
     }
-  }
-
-  @override
-  ValueListenable<AnimatorStatus> get status => _status.view();
-
-  @override
-  void stop({bool reset = false}) {
-    controller.stop(canceled: true);
-    if (reset) {
-      this.reset();
-    }
+    return AnimatorStatus.forward;
   }
 
   @override
@@ -110,25 +67,44 @@ class ObjectAnimator extends AnimatorWithValues with Diagnosticable {
     if (animation.repeatCount == -1) {
       return const Duration(days: 365);
     }
-    final duration = startDelay + controller.duration!;
     final repeatCycles = animation.repeatMode == RepeatMode.reverse ? 2 : 1;
-    return duration * (animation.repeatCount * repeatCycles + 1);
+    return duration * (animation.repeatCount * repeatCycles + 1) + startDelay;
   }
-
-  @override
-  ValueListenable<void> get changes => controller.view.view();
 
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
     properties.add(DiagnosticsProperty('animation', animation));
     properties.add(DiagnosticsProperty('tween', tween));
-    properties.add(DiagnosticsProperty('controller', controller));
-    properties.add(DiagnosticsProperty('status', _status.value));
+    properties.add(DiagnosticsProperty('duration', duration));
     properties.add(DiagnosticsProperty('startDelay', startDelay));
   }
 
   @override
   Iterable<String> get nonUniqueAnimatedAttributes =>
       tween.nonUniqueAnimatedAttributes;
+
+  double t(Duration timeFromStart) {
+    if (timeFromStart > totalDuration) {
+      return 1.0;
+    }
+    timeFromStart -= startDelay;
+    double t;
+    if (animation.repeatCount == 0) {
+      t = timeFromStart.inMicroseconds / duration.inMicroseconds;
+    } else if (animation.repeatMode == RepeatMode.reverse) {
+      // each repeat takes 2 cycles.
+      final cycleDuration = 2 * duration.inMicroseconds;
+      t = (timeFromStart.inMicroseconds % cycleDuration) / cycleDuration;
+      // we are going from 0 to 1 in 2 cycles, but we want to go from 0 to 1 to
+      // 0 in 2 cycles, do do it.
+      t = (t * 2) - (t > 0.5 ? 1.0 : 0.0);
+    } else {
+      // each repeat takes one cycle.
+      t = (timeFromStart.inMicroseconds % duration.inMicroseconds) /
+          duration.inMicroseconds;
+    }
+
+    return t.clamp(0.0, 1.0);
+  }
 }

@@ -10,9 +10,8 @@ import 'package:vector_drawable/vector_drawable.dart';
 import 'animator.dart';
 import 'object.dart';
 
-abstract class AnimatorSet extends AnimatorWithValues
-    with DiagnosticableTreeMixin {
-  final List<AnimatorWithValues> children;
+abstract class AnimatorSet extends Animator with DiagnosticableTreeMixin {
+  final List<Animator> children;
   AnimatorSet._(this.children);
 
   @override
@@ -21,7 +20,7 @@ abstract class AnimatorSet extends AnimatorWithValues
 
   factory AnimatorSet({
     required AnimationSet animation,
-    required AnimatorWithValues Function(AnimationNode) childFactory,
+    required Animator Function(AnimationNode) childFactory,
   }) {
     if (animation.children.isEmpty) {
       return EmptyAnimatorSet();
@@ -36,71 +35,15 @@ abstract class AnimatorSet extends AnimatorWithValues
   }
 
   @override
-  void dispose() {
-    for (final animation in children) {
-      animation.dispose();
-    }
-  }
-
-  @override
-  void reset({bool toFinish = false}) {
-    for (final animation in children) {
-      animation.reset(toFinish: toFinish);
-    }
-  }
-
-  @override
-  void stop({bool reset = false}) {
-    for (final animation in children) {
-      animation.stop(reset: reset);
-    }
-  }
-
-  @override
   Iterable<String> get nonUniqueAnimatedAttributes =>
       children.expand((e) => e.nonUniqueAnimatedAttributes);
 }
 
 class SequentialAnimatorSet extends AnimatorSet {
-  final ValueNotifier<AnimatorWithValues> _current;
-
-  SequentialAnimatorSet(List<AnimatorWithValues> children)
-      : _current = ValueNotifier(children.first),
-        super._(children);
+  SequentialAnimatorSet(List<Animator> children) : super._(children);
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
-    properties.add(DiagnosticsProperty('current', _current.value));
-  }
-
-  @override
-  void reset({bool toFinish = false}) {
-    super.reset(toFinish: toFinish);
-    _current.value = toFinish ? children.last : children.first;
-  }
-
-  @override
-  Future<void> start({bool forward = true, bool fromStart = false}) async {
-    if (fromStart) {
-      reset(toFinish: !forward);
-    }
-    for (final animation in forward ? children : children.reversed) {
-      _current.value = animation;
-      try {
-        await animation.start(forward: forward, fromStart: fromStart);
-      } on TickerCanceled {
-        break;
-      }
-    }
-  }
-
-  @override
-  ValueListenable<AnimatorStatus> get status =>
-      _current.view().bind((current) => current.status);
-
-  void dispose() {
-    _current.dispose();
-    super.dispose();
   }
 
   @override
@@ -108,44 +51,32 @@ class SequentialAnimatorSet extends AnimatorSet {
       children.fold(Duration.zero, (acc, b) => acc + b.totalDuration);
 
   @override
-  Listenable get changes =>
-      _current.view().bind((c) => c.changes.asValueListenable);
+  Map<String, StyleResolvable<Object>> values(Duration timeFromStart) {
+    Duration elapsedDuration = Duration.zero;
+    final result = <String, StyleResolvable<Object>>{};
+    for (final child in children) {
+      if (elapsedDuration > timeFromStart) {
+        break;
+      }
+      result.addAll(child.values(timeFromStart - elapsedDuration));
+      elapsedDuration += child.totalDuration;
+    }
+    return result;
+  }
 
   @override
-  Map<String, StyleResolvable<Object>> get values {
-    final finishedState = status.value == AnimatorStatus.forward
-        ? AnimatorStatus.completed
-        : status.value == AnimatorStatus.reverse
-            ? AnimatorStatus.dismissed
-            : status.value;
-    final delayed = <String, StyleResolvable<Object>>{};
-    for (final delayedChild
-        in children.where((e) => e.status.value == AnimatorStatus.delay)) {
-      final childValues = delayedChild.values;
-      for (final key in childValues.keys)
-        delayed.putIfAbsent(key, () => childValues[key]!);
+  AnimatorStatus status(Duration timeFromStart) {
+    Duration elapsedDuration = Duration.zero;
+    AnimatorStatus result = AnimatorStatus.dismissed;
+    for (final child in children) {
+      if (child.totalDuration + elapsedDuration < timeFromStart) {
+        elapsedDuration += child.totalDuration;
+        continue;
+      }
+      result = child.status((timeFromStart - elapsedDuration));
+      break;
     }
-    final finished = <String, StyleResolvable<Object>>{};
-    // Walk the children backwards in the finish order
-    for (final finishedChild
-        in (children.where((e) => e.status.value == finishedState).toList()
-          ..sort(_byLargestDuration))) {
-      final childValues = finishedChild.values;
-      for (final key in childValues.keys)
-        finished.putIfAbsent(key, () => childValues[key]!);
-    }
-    final active = <String, StyleResolvable<Object>>{};
-    for (final activeChild
-        in children.where((e) => e.status.value == status.value)) {
-      final childValues = activeChild.values;
-      for (final key in childValues.keys)
-        active.putIfAbsent(key, () => childValues[key]!);
-    }
-    return {
-      for (final key
-          in active.keys.followedBy(finished.keys).followedBy(delayed.keys))
-        key: (active[key] ?? finished[key] ?? delayed[key])!,
-    };
+    return result;
   }
 }
 
@@ -153,108 +84,85 @@ class EmptyAnimatorSet extends AnimatorSet {
   EmptyAnimatorSet() : super._(const []);
 
   @override
-  Future<void> start({bool forward = true, bool fromStart = false}) async {}
-
-  @override
-  ValueListenable<AnimatorStatus> get status =>
-      SingleValueListenable(AnimatorStatus.dismissed);
+  AnimatorStatus status(Duration timeFromStart) => AnimatorStatus.dismissed;
 
   @override
   Duration get totalDuration => Duration.zero;
 
   @override
-  ValueListenable<void> get changes => SingleValueListenable(null);
-
-  @override
-  Map<String, StyleResolvable<Object>> get values => const {};
+  Map<String, StyleResolvable<Object>> values(Duration timeFromStart) =>
+      const {};
 }
 
-int _sortBySmallestStartDelay(AnimatorWithValues a, AnimatorWithValues b) {
+/// When sorting with this order, in order to find the value at any point
+/// becomes as simple as walking the children in sorted order and adding the
+/// values for Animators at the correct state (forward, reverse or completed),
+/// while overriding the already stored result value.
+///
+/// Take the following example:
+/// |---*-------*----------*---------------------------------+---------------|
+/// <---1--->   1          1                                 1
+/// <---2-------2----------2------------------------------>  2
+///    <3-------3--->      3                                 3
+///     -       -  <-------4--------------------------->     4
+///     -       -  <-------5---------------------------------5--------------->
+///
+int _byTraverseOrder(Animator a, Animator b) {
   Duration aDelay = a is ObjectAnimator ? a.startDelay : Duration.zero;
   Duration bDelay = b is ObjectAnimator ? b.startDelay : Duration.zero;
-  return aDelay.compareTo(bDelay);
-}
+  final delayResult = aDelay.compareTo(bDelay);
+  if (delayResult != 0) {
+    return delayResult;
+  }
 
-int _byLargestDuration(AnimatorWithValues a, AnimatorWithValues b) {
   Duration aDuration = a.totalDuration;
   Duration bDuration = b.totalDuration;
   return aDuration.compareTo(bDuration);
 }
 
 class TogetherAnimatorSet extends AnimatorSet {
-  final AnimatorWithValues _longest;
+  final Duration _duration;
+  final Duration _delayDuration;
   final ValueNotifier<AnimatorStatus> _status;
 
-  TogetherAnimatorSet(List<AnimatorWithValues> children)
-      : _longest = children
-            .reduce((a, b) => a.totalDuration > b.totalDuration ? a : b),
+  TogetherAnimatorSet(List<Animator> children)
+      : _duration = children
+            .reduce((a, b) => a.totalDuration > b.totalDuration ? a : b)
+            .totalDuration,
+        _delayDuration = children.fold<Duration>(Duration.zero, (max, e) {
+          final delay = (e is ObjectAnimator) ? e.startDelay : Duration.zero;
+          return max > delay ? delay : max;
+        }),
         _status = ValueNotifier(AnimatorStatus.dismissed),
-        super._(children.toList()..sort(_sortBySmallestStartDelay));
+        super._(children.toList()..sort(_byTraverseOrder));
+
   @override
-  Future<void> start({bool forward = true, bool fromStart = false}) async {
-    _status.value = forward ? AnimatorStatus.forward : AnimatorStatus.reverse;
-    Future<void>? fut;
-    for (final animation in children) {
-      final animFut = animation
-          .start(
-            forward: forward,
-            fromStart: fromStart,
-          )
-          .catchError(ignore);
-      if (animation == _longest) {
-        fut = animFut;
-      }
+  AnimatorStatus status(Duration timeFromStart) {
+    if (timeFromStart == Duration.zero) {
+      return AnimatorStatus.dismissed;
     }
-    await fut!;
-    _status.value =
-        forward ? AnimatorStatus.completed : AnimatorStatus.dismissed;
+    if (timeFromStart >= _duration) {
+      return AnimatorStatus.completed;
+    }
+    if (timeFromStart <= _delayDuration) {
+      return AnimatorStatus.delay;
+    }
+    return AnimatorStatus.forward;
   }
 
   @override
-  ValueListenable<AnimatorStatus> get status => _longest.status;
+  Duration get totalDuration => _duration;
 
   @override
-  Duration get totalDuration =>
-      children.fold(Duration.zero, (acc, b) => acc + b.totalDuration);
+  Map<String, StyleResolvable<Object>> values(Duration timeFromStart) {
+    final ignoredStates = {AnimatorStatus.delay, AnimatorStatus.dismissed};
+    final result = <String, StyleResolvable<Object>>{};
+    // The children are sorted in the traverse order already.
+    for (final activeChild in children
+        .where((e) => !ignoredStates.contains(e.status(timeFromStart)))) {
+      result.addAll(activeChild.values(timeFromStart));
+    }
 
-  @override
-  Listenable get changes =>
-      Listenable.merge(children.map((e) => e.changes).toList());
-
-  @override
-  Map<String, StyleResolvable<Object>> get values {
-    final finishedState = _status.value == AnimatorStatus.forward
-        ? AnimatorStatus.completed
-        : _status.value == AnimatorStatus.reverse
-            ? AnimatorStatus.dismissed
-            : _status.value;
-    final delayed = <String, StyleResolvable<Object>>{};
-    for (final delayedChild
-        in children.where((e) => e.status.value == AnimatorStatus.delay)) {
-      final childValues = delayedChild.values;
-      for (final key in childValues.keys)
-        delayed.putIfAbsent(key, () => childValues[key]!);
-    }
-    final finished = <String, StyleResolvable<Object>>{};
-    // Walk the children backwards in the finish order
-    for (final finishedChild
-        in (children.where((e) => e.status.value == finishedState).toList()
-          ..sort(_byLargestDuration))) {
-      final childValues = finishedChild.values;
-      for (final key in childValues.keys)
-        finished.putIfAbsent(key, () => childValues[key]!);
-    }
-    final active = <String, StyleResolvable<Object>>{};
-    for (final activeChild
-        in children.where((e) => e.status.value == _status.value)) {
-      final childValues = activeChild.values;
-      for (final key in childValues.keys)
-        active.putIfAbsent(key, () => childValues[key]!);
-    }
-    return {
-      for (final key
-          in active.keys.followedBy(finished.keys).followedBy(delayed.keys))
-        key: (active[key] ?? finished[key] ?? delayed[key])!,
-    };
+    return result;
   }
 }

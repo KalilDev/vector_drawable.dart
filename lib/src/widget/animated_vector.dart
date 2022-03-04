@@ -8,6 +8,7 @@ import '../model/vector_drawable.dart';
 import 'src/animator/animator.dart';
 import 'src/animator/object.dart';
 import 'src/animator/set.dart';
+import 'src/animator/targets.dart';
 import 'src/interpolation.dart';
 import 'vector.dart';
 import '../model/animated_vector_drawable.dart';
@@ -72,10 +73,12 @@ class AnimatedVectorWidget extends StatefulWidget {
     required this.animatedVector,
     this.styleMapping = StyleMapping.empty,
     this.onStatusChange,
+    this.controller,
   }) : super(key: key);
   final AnimatedVector animatedVector;
   final StyleMapping styleMapping;
   final ValueChanged<AnimatorStatus>? onStatusChange;
+  final AnimatorController? controller;
 
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
@@ -118,28 +121,36 @@ Map<String, VectorDrawableNode> _namedBaseVectorElements(
 }
 
 class AnimatedVectorState extends State<AnimatedVectorWidget>
-    with TickerProviderStateMixin
-    implements Animator {
+    with SingleTickerProviderStateMixin {
+  late AnimatorController _ownedController;
+  AnimatorController? _currentController;
   AnimatedVector? _currentVector;
   late Vector base;
   late Vector animatable;
-  final Map<VectorDrawableNode, AnimatorWithValues> targetAnimators = {};
+  final Map<VectorDrawableNode, Animator> targetAnimators = {};
   late Map<String, VectorDrawableNode> namedBaseElements;
   // owns all other animators
-  late AnimatorSet root;
+  late TargetsAnimator root;
+  late Animated<TargetsAnimator> animatedRoot;
   late IDisposable _animatorStatusListener;
-  final Map<VectorDrawableNode, _StartOffsetAndThemableAttributes>
-      _nodePropsMap = {};
+  final Map<String, _StartOffsetAndThemableAttributes> _nodePropsMap = {};
+  final List<StyleResolvable<Object>> propDefaults = [];
   int startOffset = 0;
   int propsLength = 0;
+  void _removeStuffFromOldAnimatorController() {
+    assert(_currentController != null);
+    animatedRoot.dispose();
+    _animatorStatusListener.dispose();
+    _currentController = null;
+  }
+
   void _removeStuffFromOldVector() {
     assert(_currentVector != null);
     _nodePropsMap.clear();
+    propDefaults.clear();
     startOffset = 0;
     propsLength = 0;
     targetAnimators.clear();
-    root.dispose();
-    _animatorStatusListener.dispose();
     _currentVector = null;
   }
 
@@ -156,17 +167,25 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
         _buildDynamicStyleResolver(StyleMapping.empty).properties));
   }
 
+  void _createStuffForAnimatorController(AnimatorController controller) {
+    assert(_currentController == null);
+    animatedRoot = controller.animate(root);
+    _status.base = animatedRoot.status;
+    _animatorStatusListener = animatedRoot.status.unique().tap(_onStatus);
+    _currentController = controller;
+  }
+
   void _createStuffForVector(AnimatedVector vector) {
     assert(_currentVector == null);
     assert(targetAnimators.isEmpty);
     assert(_nodePropsMap.isEmpty);
+    assert(propDefaults.isEmpty);
     assert(startOffset == 0);
     assert(propsLength == 0);
     base = vector.drawable.resource!.body;
     root = widget.animatedVector.children.isEmpty
-        ? EmptyAnimatorSet()
+        ? TargetsAnimator([])
         : _createTargetAnimators(_namedBaseVectorElements(base));
-    _animatorStatusListener = root.status.unique().tap(_onStatus);
     animatable = _buildAnimatableVector();
     _currentVector = vector;
   }
@@ -178,7 +197,7 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
     }
     final targetElement = namedBaseElements[target.name]!;
     final anim = target.animation.resource!;
-    AnimatorWithValues buildAnimator(AnimationNode node) {
+    Animator buildAnimator(AnimationNode node) {
       if (node is AnimationSet) {
         return AnimatorSet(animation: node, childFactory: buildAnimator);
       }
@@ -186,41 +205,59 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
         return ObjectAnimator.from(
           target: targetElement,
           animation: node,
-          vsync: this,
         );
       }
       throw UnimplementedError();
     }
 
-    return targetAnimators[targetElement] =
-        (buildAnimator(anim.body) as AnimatorWithValues);
+    return targetAnimators[targetElement] = buildAnimator(anim.body);
   }
 
-  AnimatorSet _createTargetAnimators(
+  TargetsAnimator _createTargetAnimators(
     Map<String, VectorDrawableNode> namedBaseElements,
   ) =>
-      TogetherAnimatorSet(widget.animatedVector.children
-          .map((target) => _createTargetAnimator(namedBaseElements, target))
+      TargetsAnimator(widget.animatedVector.children
+          .map((target) {
+            final animator = _createTargetAnimator(namedBaseElements, target);
+            return animator == null
+                ? null
+                : TargetAndAnimator(target.name, animator);
+          })
           .where((e) => e != null)
           .toList()
           .cast());
 
+  @override
   void initState() {
     super.initState();
+    _ownedController = AnimatorController(vsync: this);
     _createStuffForVector(widget.animatedVector);
+    _createStuffForAnimatorController(widget.controller ?? _ownedController);
   }
 
   @override
   void didUpdateWidget(AnimatedVectorWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.animatedVector != widget.animatedVector) {
+      _removeStuffFromOldAnimatorController();
       _removeStuffFromOldVector();
       _createStuffForVector(widget.animatedVector);
+      _createStuffForAnimatorController(widget.controller ?? _ownedController);
+      return;
+    }
+    if (oldWidget.controller != widget.controller) {
+      _removeStuffFromOldAnimatorController();
+      _createStuffForAnimatorController(widget.controller ?? _ownedController);
+      return;
     }
   }
 
+  @override
   void dispose() {
     _removeStuffFromOldVector();
+    _removeStuffFromOldAnimatorController();
+    _ownedController.dispose();
+    _status.dispose();
     super.dispose();
   }
 
@@ -234,24 +271,6 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
     return animator.nonUniqueAnimatedAttributes.toSet().toList();
   }
 
-  Iterable<StyleResolvable<Object>?> _dynamicPropsFrom(
-    VectorDrawableNode node,
-    AnimatorWithValues animator,
-    List<String> themableAttrs,
-  ) {
-    final props = animator.values;
-    return themableAttrs.map(
-      (prop) {
-        final themable = props[prop];
-        if (themable == null) {
-          final base = node.getThemeableAttribute(prop);
-          return base == null ? null : SingleStyleResolvable<Object>(base);
-        }
-        return themable;
-      },
-    );
-  }
-
   VectorDrawableNode buildAnimatableTargetFromProperties(
     List<String> animatableProperties,
     VectorDrawableNode target,
@@ -262,11 +281,16 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
   ) {
     final targetStartOffset = startOffset;
     if (animatableProperties.isNotEmpty) {
-      _nodePropsMap[target] = _StartOffsetAndThemableAttributes(
+      _nodePropsMap[target.name!] = _StartOffsetAndThemableAttributes(
           targetStartOffset, animatableProperties);
     }
     startOffset += animatableProperties.length;
     propsLength += animatableProperties.length;
+    propDefaults.addAll(animatableProperties
+        .map(target.getThemeableAttribute)
+        .cast<Object>()
+        .map((e) =>
+            e is StyleResolvable<Object> ? e : SingleStyleResolvable(e)));
 
     StyleOr<T>? prop<T>(StyleOr<T>? otherwise, String name) {
       final i = animatableProperties.indexOf(name);
@@ -357,19 +381,23 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
   }
 
   AnimationStyleResolver _buildDynamicStyleResolver(StyleMapping mapping) {
-    final props = List<StyleResolvable<Object>?>.filled(propsLength, null);
-    for (final e in targetAnimators.entries) {
-      final animationInfo = _nodePropsMap[e.key];
+    final props = propDefaults.toList();
+    final values = animatedRoot.values.value.map(
+      (key, value) =>
+          MapEntry(TargetAndAnimator.decodePropertyName(key), value),
+    );
+    for (final e in values.entries) {
+      final targetAndPropName = e.key;
+      final animationInfo = _nodePropsMap[targetAndPropName.propertyName];
       if (animationInfo == null) {
         continue;
       }
-      final elementProps =
-          _dynamicPropsFrom(e.key, e.value, animationInfo.themableAttributes);
-      var i = 0;
-      for (final prop in elementProps) {
-        props[i + animationInfo.startOffset] = prop;
-        i++;
+      final propIndex = animationInfo.themableAttributes
+          .indexOf(targetAndPropName.propertyName);
+      if (propIndex == -1) {
+        continue;
       }
+      props[animationInfo.startOffset + propIndex] = e.value;
     }
     return AnimationStyleResolver(
       mapping,
@@ -381,8 +409,8 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
     return RawVectorWidget(
       vector: animatable,
       styleMapping: resolver,
-      cachingStrategy: (root.status.value == AnimatorStatus.forward ||
-              root.status.value == AnimatorStatus.reverse)
+      cachingStrategy: (animatedRoot.status.value == AnimatorStatus.forward ||
+              animatedRoot.status.value == AnimatorStatus.reverse)
           ? RenderVectorCachingStrategy.none
           : RenderVectorCachingStrategy.groupAndPath,
     );
@@ -393,7 +421,7 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
     final styleMapping = widget.styleMapping
         .mergeWith(ColorSchemeStyleMapping(Theme.of(context).colorScheme));
     return AnimatedBuilder(
-      animation: changes,
+      animation: animatedRoot.values,
       builder: (context, _) {
         final styleResolver = _buildDynamicStyleResolver(styleMapping);
         return _buildVectorWidget(
@@ -404,34 +432,24 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
     );
   }
 
-  @override
-  Listenable get changes => root.changes;
+  ValueListenable<bool> get isCompleted =>
+      animatedRoot.status.map((status) => status == AnimatorStatus.completed);
 
-  @override
-  ValueListenable<bool> get isCompleted => root.isCompleted;
+  ValueListenable<bool> get isDismissed =>
+      animatedRoot.status.map((status) => status == AnimatorStatus.dismissed);
 
-  @override
-  ValueListenable<bool> get isDismissed => root.isDismissed;
-
-  @override
-  Future<void> start({bool forward = true, bool fromStart = false}) =>
-      root.start(
-        forward: forward,
+  void start({bool fromStart = true}) => _currentController!.start(
         fromStart: fromStart,
       );
 
-  @override
-  void reset({bool toFinish = false}) => root.reset(toFinish: toFinish);
+  void reset() => _currentController!.reset();
 
-  @override
-  ValueListenable<AnimatorStatus> get status => root.status;
+  final ProxyValueListenable<AnimatorStatus> _status =
+      ProxyValueListenable(SingleValueListenable(AnimatorStatus.dismissed));
 
-  @override
-  void stop({bool reset = false}) => root.stop(reset: reset);
+  ValueListenable<AnimatorStatus> get status => _status.view();
 
-  @override
+  void stop({bool reset = false}) => _currentController!.stop(reset: reset);
+
   Duration get totalDuration => root.totalDuration;
-
-  @override
-  Iterable<String> get nonUniqueAnimatedAttributes => [];
 }
