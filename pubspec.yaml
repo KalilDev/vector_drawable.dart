@@ -1,6 +1,6 @@
 name: vector_drawable
 description: A new Flutter package project.
-version: 0.0.1
+version: 0.0.1-testing.0
 homepage:
 
 environment:
@@ -10,14 +10,16 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  path_parsing: ^1.0.0
+  xml: ^5.3.1
+  value_notifier: ^0.0.1
+  vector_math:
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^1.0.0
-  path_parsing: ^1.0.0
-  xml: ^5.3.1
-  value_notifier: ^0.0.1
+  meta:
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
