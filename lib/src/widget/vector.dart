@@ -46,7 +46,7 @@ class VectorWidget extends StatelessWidget {
       styleMapping: styleMapping.mergeWith(
         ColorSchemeStyleMapping(Theme.of(context).colorScheme),
       ),
-      cachingStrategy: RenderVectorCachingStrategy.groupAndPath,
+      cachingStrategy: 7,
     );
   }
 }
@@ -56,12 +56,12 @@ class RawVectorWidget extends LeafRenderObjectWidget {
     Key? key,
     required this.vector,
     required this.styleMapping,
-    this.cachingStrategy = RenderVectorCachingStrategy.none,
+    this.cachingStrategy = 0,
   }) : super(key: key);
 
   final Vector vector;
   final StyleResolver styleMapping;
-  final RenderVectorCachingStrategy cachingStrategy;
+  final int cachingStrategy;
 
   @override
   RenderObject createRenderObject(BuildContext context) {
@@ -402,10 +402,17 @@ abstract class StyleMapping implements StyleResolver, Diagnosticable {
       _MergedStyleMapping(this, other);
 }
 
+class _ClipPathValues {
+  final ui.Path pathData;
+  _ClipPathValues(
+    PathData pathData,
+  ) : pathData = _uiPathForPath(pathData);
+}
+
 class _PathValues {
-  final PathData pathData;
-  final Color? fillColor;
-  final Color? strokeColor;
+  final ui.Path pathData;
+  final Color fillColor;
+  final Color strokeColor;
   final double strokeWidth;
   final double strokeAlpha;
   final double fillAlpha;
@@ -420,30 +427,59 @@ class _PathValues {
     double trimPathStart,
     double trimPathEnd,
     double trimPathOffset,
-  ) : pathData = pathData.segmentsFrom(
+  ) : pathData = _uiPathForPath(pathData.segmentsFrom(
           (trimPathStart + trimPathOffset)
               .clamp(0.0, (trimPathEnd + trimPathOffset).clamp(0.0, 1.0)),
           (trimPathEnd + trimPathOffset).clamp(0.0, 1.0),
-        );
+        ));
 }
 
-enum RenderVectorCachingStrategy {
-  groupAndPath,
+ui.Path _uiPathForPath(PathData pathData) {
+  final creator = _UiPathBuilderProxy();
+  pathData.emitTo(creator);
+  return creator.path;
+}
+
+int _flagsFromSet(Set<RenderVectorCache> parts) {
+  int result = 0;
+  if (parts.contains(RenderVectorCache.clipPath)) {
+    result |= 1;
+  }
+  if (parts.contains(RenderVectorCache.group)) {
+    result |= 2;
+  }
+  if (parts.contains(RenderVectorCache.path)) {
+    result |= 4;
+  }
+  return result;
+}
+
+Set<RenderVectorCache> _setFromFlags(int flags) => {
+      if (_cacheClipPath(flags)) RenderVectorCache.clipPath,
+      if (_cacheGroup(flags)) RenderVectorCache.group,
+      if (_cachePath(flags)) RenderVectorCache.path,
+    };
+bool _cacheClipPath(int cacheFlags) => (cacheFlags & 1) == 1;
+bool _cacheGroup(int cacheFlags) => (cacheFlags & 2) == 2;
+bool _cachePath(int cacheFlags) => (cacheFlags & 4) == 4;
+enum RenderVectorCache {
+  clipPath,
   group,
   path,
-  none,
 }
 
 class RenderVector extends RenderBox {
   final Map<Group, _GroupValues> _groupCache = {};
   final Map<Path, _PathValues> _pathCache = {};
+  final Map<ClipPath, _ClipPathValues> _clipPathCache = {};
+
   RenderVector({
     required Vector vector,
     required double devicePixelRatio,
     required double textScaleFactor,
     required TextDirection textDirection,
     required StyleResolver styleMapping,
-    required RenderVectorCachingStrategy cachingStrategy,
+    required int cachingStrategy,
   })  : _vector = vector,
         _devicePixelRatio = devicePixelRatio,
         _textScaleFactor = textScaleFactor,
@@ -509,22 +545,27 @@ class RenderVector extends RenderBox {
       return;
     }
 
-    if (cachingStrategy != RenderVectorCachingStrategy.none) {
+    if (cachingStrategy != 0) {
       final currentContains = styleMapping.containsAny(vector.usedStyles);
       if (currentContains ||
           currentContains != _styleMapping.containsAny(vector.usedStyles)) {
         markNeedsPaint();
       }
-      if (cachingStrategy == RenderVectorCachingStrategy.group ||
-          cachingStrategy == RenderVectorCachingStrategy.groupAndPath) {
+      if (_cacheGroup(cachingStrategy)) {
         for (final g in _groupCache.keys.toList()) {
           if (styleMapping.containsAny(g.localUsedStyles)) {
             _groupCache.remove(g);
           }
         }
       }
-      if (cachingStrategy == RenderVectorCachingStrategy.path ||
-          cachingStrategy == RenderVectorCachingStrategy.groupAndPath) {
+      if (_cacheClipPath(cachingStrategy)) {
+        for (final cp in _clipPathCache.keys.toList()) {
+          if (styleMapping.containsAny(cp.localUsedStyles)) {
+            _clipPathCache.remove(cp);
+          }
+        }
+      }
+      if (_cachePath(cachingStrategy)) {
         for (final p in _pathCache.keys.toList()) {
           if (styleMapping.containsAny(p.usedStyles)) {
             _pathCache.remove(p);
@@ -537,20 +578,21 @@ class RenderVector extends RenderBox {
     _styleMapping = styleMapping;
   }
 
-  RenderVectorCachingStrategy _cachingStrategy;
-  RenderVectorCachingStrategy get cachingStrategy => _cachingStrategy;
-  set cachingStrategy(RenderVectorCachingStrategy cachingStrategy) {
+  int _cachingStrategy;
+  int get cachingStrategy => _cachingStrategy;
+  set cachingStrategy(int cachingStrategy) {
     if (_cachingStrategy == cachingStrategy) {
       return;
     }
     _cachingStrategy = cachingStrategy;
-    if (cachingStrategy == RenderVectorCachingStrategy.group) {
+    if (!_cachePath(cachingStrategy)) {
       _pathCache.clear();
-    } else if (cachingStrategy == RenderVectorCachingStrategy.path) {
+    }
+    if (!_cacheGroup(cachingStrategy)) {
       _groupCache.clear();
-    } else if (cachingStrategy == RenderVectorCachingStrategy.none) {
-      _pathCache.clear();
-      _groupCache.clear();
+    }
+    if (!_cacheClipPath(cachingStrategy)) {
+      _clipPathCache.clear();
     }
   }
 
@@ -612,29 +654,28 @@ class RenderVector extends RenderBox {
 
   void _paintGroup(Canvas canvas, Group group) {
     _GroupValues values;
-    if (cachingStrategy == RenderVectorCachingStrategy.group ||
-        cachingStrategy == RenderVectorCachingStrategy.groupAndPath) {
+    if (_cacheGroup(cachingStrategy)) {
       values = _groupCache.putIfAbsent(
         group,
         () => _GroupValues(
-          group.rotation?.resolve(styleMapping),
-          group.pivotX?.resolve(styleMapping),
-          group.pivotY?.resolve(styleMapping),
-          group.scaleX?.resolve(styleMapping),
-          group.scaleY?.resolve(styleMapping),
-          group.translateX?.resolve(styleMapping),
-          group.translateY?.resolve(styleMapping),
+          group.rotation.resolve(styleMapping),
+          group.pivotX.resolve(styleMapping),
+          group.pivotY.resolve(styleMapping),
+          group.scaleX.resolve(styleMapping),
+          group.scaleY.resolve(styleMapping),
+          group.translateX.resolve(styleMapping),
+          group.translateY.resolve(styleMapping),
         ),
       );
     } else {
       values = _GroupValues(
-        group.rotation?.resolve(styleMapping),
-        group.pivotX?.resolve(styleMapping),
-        group.pivotY?.resolve(styleMapping),
-        group.scaleX?.resolve(styleMapping),
-        group.scaleY?.resolve(styleMapping),
-        group.translateX?.resolve(styleMapping),
-        group.translateY?.resolve(styleMapping),
+        group.rotation.resolve(styleMapping),
+        group.pivotX.resolve(styleMapping),
+        group.pivotY.resolve(styleMapping),
+        group.scaleX.resolve(styleMapping),
+        group.scaleY.resolve(styleMapping),
+        group.translateX.resolve(styleMapping),
+        group.translateY.resolve(styleMapping),
       );
     }
 
@@ -647,12 +688,6 @@ class RenderVector extends RenderBox {
     } else {
       _paintChildren(canvas, group.children);
     }
-  }
-
-  static ui.Path _uiPathForPath(PathData pathData) {
-    final creator = _UiPathBuilderProxy();
-    pathData.emitTo(creator);
-    return creator.path;
   }
 
   // TODO: trimPathStart, trimPathEnd, trimPathOffset, fillType
@@ -689,7 +724,14 @@ class RenderVector extends RenderBox {
   // According to https://github.com/aosp-mirror/platform_frameworks_base/blob/47fed6ba6ab8a68267a9b3ac6cb9decd4ba122ed/libs/hwui/VectorDrawable.cpp#L264
   // there is no save layer and restore layer.
   void _paintClipPath(Canvas canvas, ClipPath path) {
-    final uiPath = _uiPathForPath(path.pathData.resolve(styleMapping)!);
+    _ClipPathValues values;
+    if (_cacheClipPath(cachingStrategy)) {
+      values = _clipPathCache.putIfAbsent(
+          path, () => _ClipPathValues(path.pathData.resolve(styleMapping)!));
+    } else {
+      values = _ClipPathValues(path.pathData.resolve(styleMapping)!);
+    }
+    final uiPath = values.pathData;
     canvas.clipPath(uiPath);
     _paintChildren(canvas, path.children);
   }
@@ -699,14 +741,13 @@ class RenderVector extends RenderBox {
       return;
     }
     _PathValues values;
-    if (cachingStrategy == RenderVectorCachingStrategy.path ||
-        cachingStrategy == RenderVectorCachingStrategy.groupAndPath) {
+    if (_cachePath(cachingStrategy)) {
       values = _pathCache.putIfAbsent(
         path,
         () => _PathValues(
           path.pathData.resolve(styleMapping)!,
-          path.fillColor?.resolve(styleMapping),
-          path.strokeColor?.resolve(styleMapping),
+          path.fillColor.resolve(styleMapping)!,
+          path.strokeColor.resolve(styleMapping)!,
           path.strokeWidth.resolve(styleMapping)!,
           path.strokeAlpha.resolve(styleMapping)!,
           path.fillAlpha.resolve(styleMapping)!,
@@ -718,8 +759,8 @@ class RenderVector extends RenderBox {
     } else {
       values = _PathValues(
         path.pathData.resolve(styleMapping)!,
-        path.fillColor?.resolve(styleMapping),
-        path.strokeColor?.resolve(styleMapping),
+        path.fillColor.resolve(styleMapping)!,
+        path.strokeColor.resolve(styleMapping)!,
         path.strokeWidth.resolve(styleMapping)!,
         path.strokeAlpha.resolve(styleMapping)!,
         path.fillAlpha.resolve(styleMapping)!,
@@ -737,15 +778,15 @@ class RenderVector extends RenderBox {
       return;
     }
     final paint = _paintForPath(path, values);
-    final uiPath = _uiPathForPath(values.pathData);
-    if (values.fillColor != null) {
+    final uiPath = values.pathData;
+    if (values.fillColor != Colors.transparent) {
       paint
         ..color = values.fillColor?.withOpacity(values.fillAlpha) ??
             Colors.transparent
         ..style = PaintingStyle.fill;
       canvas.drawPath(uiPath, paint);
     }
-    if (path.strokeColor != null) {
+    if (values.strokeColor != Colors.transparent) {
       paint
         ..color = values.strokeColor?.withOpacity(values.strokeAlpha) ??
             Colors.transparent
@@ -768,8 +809,7 @@ class RenderVector extends RenderBox {
     }
   }
 
-  @override
-  void paint(PaintingContext context, Offset offset) {
+  void _paintWithOpacity(PaintingContext context, Offset offset) {
     final transform = Matrix4.identity();
     var widthScale = size.width / vector.viewportWidth;
     if (textDirection == TextDirection.rtl && vector.autoMirrored) {
@@ -777,9 +817,7 @@ class RenderVector extends RenderBox {
     }
     var heightScale = size.height / vector.viewportHeight;
     transform.scale(widthScale, heightScale);
-    context.pushOpacity(
-        offset, (vector.opacity.resolve(styleMapping)! * 255).toInt(),
-        (context, offset) {
+    final vectorTint = vector.tint.resolve(styleMapping) ?? Colors.transparent;
       context.pushTransform(
         needsCompositing,
         offset,
@@ -787,22 +825,36 @@ class RenderVector extends RenderBox {
         (context, offset) {
           final canvas = context.canvas;
           canvas.save();
-          canvas.translate(-offset.dx, -offset.dy);
-          if (vector.tint != null) {
+        canvas.translate(offset.dx, offset.dy);
+        if (vectorTint != Colors.transparent) {
             canvas.saveLayer(
                 null,
                 Paint()
-                  ..color = vector.tint!.resolve(styleMapping)!
+                ..color = vectorTint
                   ..blendMode = vector.tintMode);
           }
           _paintChildren(canvas, vector.children);
-          if (vector.tint != null) {
+        if (vectorTint != Colors.transparent) {
             canvas.restore();
           }
           canvas.restore();
         },
       );
-    });
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    final vectorAlpha =
+        ((vector.opacity.resolve(styleMapping) ?? 1.0) * 255).toInt();
+    if (vectorAlpha != 255) {
+      context.pushOpacity(
+        offset,
+        vectorAlpha,
+        _paintWithOpacity,
+      );
+    } else {
+      _paintWithOpacity(context, offset);
+    }
   }
 }
 
