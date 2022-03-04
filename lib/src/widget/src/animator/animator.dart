@@ -84,6 +84,7 @@ class AnimatorController extends IDisposableBase implements ICreateTickerViews {
   /// off an [AnimatorController] at any given time
   Animated<T> animate<T extends Animator>(T animator) {
     _totalDuration.value = animator.totalDuration;
+    _controller.duration = animator.totalDuration;
 
     return _animated.value = Animated<T>(animator, this);
   }
@@ -125,7 +126,6 @@ class AnimatorController extends IDisposableBase implements ICreateTickerViews {
 
   @override
   void dispose() {
-    _animated.value?.dispose();
     _animated.dispose();
     _controller.dispose();
     super.dispose();
