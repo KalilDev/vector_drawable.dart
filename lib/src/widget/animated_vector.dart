@@ -127,7 +127,7 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
   AnimatedVector? _currentVector;
   late Vector base;
   late Vector animatable;
-  final Map<VectorDrawableNode, Animator> targetAnimators = {};
+  final Map<VectorDrawableNode, List<Animator>> targetAnimators = {};
   late Map<String, VectorDrawableNode> namedBaseElements;
   // owns all other animators
   late TargetsAnimator root;
@@ -210,7 +210,10 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
       throw UnimplementedError();
     }
 
-    return targetAnimators[targetElement] = buildAnimator(anim.body);
+    final animatorList = targetAnimators.putIfAbsent(targetElement, () => []);
+    final newAnimator = buildAnimator(anim.body);
+    animatorList.add(newAnimator);
+    return newAnimator;
   }
 
   TargetsAnimator _createTargetAnimators(
@@ -267,8 +270,9 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
     if (!targetAnimators.containsKey(node)) {
       return const [];
     }
-    final animator = targetAnimators[node]!;
-    return animator.nonUniqueAnimatedAttributes.toSet().toList();
+    final animators = targetAnimators[node]!;
+    final attrs = animators.expand((e) => e.nonUniqueAnimatedAttributes);
+    return attrs.toSet().toList();
   }
 
   VectorDrawableNode buildAnimatableTargetFromProperties(
@@ -292,7 +296,7 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
         .map((e) =>
             e is StyleResolvable<Object> ? e : SingleStyleResolvable(e)));
 
-    StyleOr<T>? prop<T>(StyleOr<T>? otherwise, String name) {
+    StyleOr<T> prop<T>(StyleOr<T> otherwise, String name) {
       final i = animatableProperties.indexOf(name);
       if (i == -1) {
         return otherwise;
@@ -314,7 +318,7 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
         tint: t.tint,
         tintMode: t.tintMode,
         autoMirrored: t.autoMirrored,
-        opacity: prop(t.opacity, 'alpha')!,
+        opacity: prop(t.opacity, 'alpha'),
         children: t.children.map(buildChild).toList().cast(),
       );
     } else if (t is Group) {
@@ -341,15 +345,15 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
     } else if (t is Path) {
       return Path(
         name: t.name,
-        pathData: prop(t.pathData, 'pathData')!,
+        pathData: prop(t.pathData, 'pathData'),
         fillColor: prop(t.fillColor, 'fillColor'),
         strokeColor: prop(t.strokeColor, 'strokeColor'),
-        strokeWidth: prop(t.strokeWidth, 'strokeWidth')!,
-        strokeAlpha: prop(t.strokeAlpha, 'strokeAlpha')!,
-        fillAlpha: prop(t.fillAlpha, 'fillAlpha')!,
-        trimPathStart: prop(t.trimPathStart, 'trimPathStart')!,
-        trimPathEnd: prop(t.trimPathEnd, 'trimPathEnd')!,
-        trimPathOffset: prop(t.trimPathOffset, 'trimPathOffset')!,
+        strokeWidth: prop(t.strokeWidth, 'strokeWidth'),
+        strokeAlpha: prop(t.strokeAlpha, 'strokeAlpha'),
+        fillAlpha: prop(t.fillAlpha, 'fillAlpha'),
+        trimPathStart: prop(t.trimPathStart, 'trimPathStart'),
+        trimPathEnd: prop(t.trimPathEnd, 'trimPathEnd'),
+        trimPathOffset: prop(t.trimPathOffset, 'trimPathOffset'),
         strokeLineCap: t.strokeLineCap,
         strokeLineJoin: t.strokeLineJoin,
         strokeMiterLimit: t.strokeMiterLimit,
@@ -358,7 +362,7 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
     } else if (t is ClipPath) {
       return ClipPath(
         name: t.name,
-        pathData: prop(t.pathData, 'pathData')!,
+        pathData: prop(t.pathData, 'pathData'),
         children: t.children.map(buildChild).toList().cast(),
       );
     } else {
@@ -388,7 +392,7 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
     );
     for (final e in values.entries) {
       final targetAndPropName = e.key;
-      final animationInfo = _nodePropsMap[targetAndPropName.propertyName];
+      final animationInfo = _nodePropsMap[targetAndPropName.target];
       if (animationInfo == null) {
         continue;
       }
@@ -411,8 +415,8 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
       styleMapping: resolver,
       cachingStrategy: (animatedRoot.status.value == AnimatorStatus.forward ||
               animatedRoot.status.value == AnimatorStatus.reverse)
-          ? RenderVectorCachingStrategy.none
-          : RenderVectorCachingStrategy.groupAndPath,
+          ? 0
+          : 7,
     );
   }
 
