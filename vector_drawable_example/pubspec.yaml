@@ -38,7 +38,7 @@ dependencies:
     path: ../
   path_parsing: ^1.0.1
   xml: ^5.3.1
-  value_notifier: ^0.0.1
+  value_notifier: ^0.0.2-prerelease.20
 
 dev_dependencies:
   flutter_test:
