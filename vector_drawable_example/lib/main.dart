@@ -5,6 +5,7 @@ import 'package:xml/xml.dart';
 import 'package:vector_drawable/src/visiting/codegen.dart';
 import 'package:vector_drawable/src/visiting/async_resolver.dart';
 import 'generated_resources.dart' as drawable;
+import 'part.dart' as drawable;
 
 void main() {
   runApp(_MyApp());
@@ -15,6 +16,7 @@ class _MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
+    theme: ThemeData.dark(),
         home: Material(
             color: Colors.black,
             child: Center(
@@ -33,7 +35,7 @@ class _TestVectorWidget extends StatefulWidget {
 class _TestVectorWidgetState extends State<_TestVectorWidget> {
   final animatedVectorKey = GlobalKey<AnimatedVectorState>();
   int _drawableIndex = 6;
-  bool _animated = false;
+  bool _animated = true;
   void _reset() => animatedVectorKey.currentState!.reset();
   void _start() => animatedVectorKey.currentState!.start();
   void _stop() => animatedVectorKey.currentState!.stop();
@@ -49,6 +51,7 @@ class _TestVectorWidgetState extends State<_TestVectorWidget> {
       drawable.avd_tab_stopwatch_white_24dp.body,
       drawable.avd_tab_timer_white_24dp.body,
       drawable.avd_bedtime_onboarding_graphic.body,
+      drawable.avd_bedtime_onboarding_graphic_colored_background.body,
       drawable.drawable.body,
     ];
     return Scaffold(
@@ -61,7 +64,7 @@ class _TestVectorWidgetState extends State<_TestVectorWidget> {
             child: Material(
               color: Theme.of(context).colorScheme.primary,
               child: Padding(
-                padding: const EdgeInsets.all(120.0),
+                padding: const EdgeInsets.all(16.0),
                 child: Transform.scale(
                   scale: 1,
                   child: _animated

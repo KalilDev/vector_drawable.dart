@@ -95,11 +95,11 @@ class PathData {
     // Parse each segment individually, appending an close segment in case an
     // error occurs.
     final result = <PathSegmentData>[];
-      while (parser.hasMoreData) {
+    while (parser.hasMoreData) {
       try {
         result.add(parser.parseSegment());
-    } catch (e) {
-      print(e);
+      } catch (e) {
+        print(e);
       }
     }
     return result;

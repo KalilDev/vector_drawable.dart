@@ -509,9 +509,9 @@ class _AnimatedVectorControls extends StatelessWidget {
   }) : super(key: key);
   final GlobalKey<AnimatedVectorState> vectorKey;
 
-  void _reset() => vectorKey.currentState!.reset();
+  void _reset() => vectorKey.currentState!.stop(reset:true);
   void _play() => vectorKey.currentState!.start();
-  void _forward() => vectorKey.currentState!.reset(toFinish: true);
+  void _forward() => vectorKey.currentState!.reset();
 
   @override
   Widget build(BuildContext context) => Row(

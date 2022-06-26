@@ -462,6 +462,7 @@ Set<RenderVectorCache> _setFromFlags(int flags) => {
 bool _cacheClipPath(int cacheFlags) => (cacheFlags & 1) == 1;
 bool _cacheGroup(int cacheFlags) => (cacheFlags & 2) == 2;
 bool _cachePath(int cacheFlags) => (cacheFlags & 4) == 4;
+
 enum RenderVectorCache {
   clipPath,
   group,
@@ -818,28 +819,28 @@ class RenderVector extends RenderBox {
     var heightScale = size.height / vector.viewportHeight;
     transform.scale(widthScale, heightScale);
     final vectorTint = vector.tint.resolve(styleMapping) ?? Colors.transparent;
-      context.pushTransform(
-        needsCompositing,
-        offset,
-        transform,
-        (context, offset) {
-          final canvas = context.canvas;
-          canvas.save();
+    context.pushTransform(
+      needsCompositing,
+      offset,
+      transform,
+      (context, offset) {
+        final canvas = context.canvas;
+        canvas.save();
         canvas.translate(offset.dx, offset.dy);
         if (vectorTint != Colors.transparent) {
-            canvas.saveLayer(
-                null,
-                Paint()
+          canvas.saveLayer(
+              null,
+              Paint()
                 ..color = vectorTint
-                  ..blendMode = vector.tintMode);
-          }
-          _paintChildren(canvas, vector.children);
+                ..blendMode = vector.tintMode);
+        }
+        _paintChildren(canvas, vector.children);
         if (vectorTint != Colors.transparent) {
-            canvas.restore();
-          }
           canvas.restore();
-        },
-      );
+        }
+        canvas.restore();
+      },
+    );
   }
 
   @override
