@@ -1,17 +1,10 @@
-import 'dart:collection';
-
-import 'package:flutter/material.dart' hide ClipPath;
-import 'package:vector_drawable/src/parsing/style.dart';
-import 'package:vector_drawable/src/serializing/style.dart';
-import 'package:vector_drawable/vector_drawable.dart';
-import 'package:xml/xml.dart';
-import 'package:path_parsing/path_parsing.dart';
-import 'package:path_parsing/src/path_segment_type.dart';
+import 'package:vector_drawable/src/serializing/animation.dart';
 
 import '../model/path.dart';
-import '../model/resource.dart';
 import '../model/vector_drawable.dart';
-import 'exception.dart';
+import 'style.dart';
+import 'package:xml/xml.dart';
+
 import 'util.dart';
 
 void serializeVectorDrawable(
@@ -62,7 +55,7 @@ void _serializeClipPath(XmlBuilder b, ClipPath node) {
     b.styleOrAndroidAttribute<PathData>(
       'pathData',
       node.pathData,
-      stringify: (p) => p.asString,
+      stringify: (p) => throwUnimplemented() /* p.asString*/,
     );
     for (final child in node.children) {
       _serializeVectorPart(b, child);
@@ -76,7 +69,7 @@ void _serializePath(XmlBuilder b, Path node) {
     b.styleOrAndroidAttribute<PathData>(
       'pathData',
       node.pathData,
-      stringify: (p) => p.asString,
+      stringify: (p) => throwUnimplemented() /*p.asString*/,
     );
     b.styleOrAndroidAttribute(
       'fillColor',
@@ -114,19 +107,19 @@ void _serializeVectorPart(XmlBuilder b, VectorPart node) {
   }
 }
 
-String? _serializeTintMode(BlendMode tintMode) {
+String? _serializeTintMode(TintMode tintMode) {
   switch (tintMode) {
-    case BlendMode.plus:
+    case TintMode.plus:
       return 'add';
-    case BlendMode.multiply:
+    case TintMode.multiply:
       return 'multiply';
-    case BlendMode.screen:
+    case TintMode.screen:
       return 'screen';
-    case BlendMode.srcATop:
+    case TintMode.srcATop:
       return 'src_atop';
-    case BlendMode.srcIn:
+    case TintMode.srcIn:
       return 'src_in';
-    case BlendMode.srcOver:
+    case TintMode.srcOver:
       return 'src_over';
     default:
       return null;

@@ -1,7 +1,6 @@
-import 'dart:ui';
-
 import 'package:xml/xml.dart';
-import 'package:xml/src/xml/utils/namespace.dart';
+
+import '../model/color.dart';
 
 const kAndroidXmlNamespace = 'http://schemas.android.com/apk/res/android';
 const kAaptXmlNamespace = 'http://schemas.android.com/aapt';
@@ -34,7 +33,7 @@ extension AndroidXmlBuilderE on XmlBuilder {
 
 String serializeEnum<T extends Enum>(T value) => value.name;
 
-String serializeHexColor(Color color) => '#'
+String serializeHexColor(VectorColor color) => '#'
     '${color.alpha.toRadixString(16)}'
     '${color.red.toRadixString(16)}'
     '${color.green.toRadixString(16)}'

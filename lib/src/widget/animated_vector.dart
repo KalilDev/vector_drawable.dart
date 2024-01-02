@@ -13,7 +13,7 @@ import 'src/interpolation.dart';
 import 'vector.dart';
 import '../model/animated_vector_drawable.dart';
 import '../model/animation.dart';
-import 'package:value_notifier/value_notifier.dart';
+import 'package:value_listenables/value_listenables.dart';
 
 class _StartOffsetAndThemableAttributes {
   final int startOffset;
@@ -56,9 +56,7 @@ class AnimationStyleResolver extends StyleMapping with DiagnosticableTreeMixin {
       prop.namespace == kNamespace || parentResolver.contains(prop);
 
   @override
-  List<DiagnosticsNode> debugDescribeChildren() => properties
-      .map((e) => e?.toDiagnosticsNode() ?? DiagnosticsProperty('prop', null))
-      .toList();
+  List<DiagnosticsNode> debugDescribeChildren() => [];
 
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {

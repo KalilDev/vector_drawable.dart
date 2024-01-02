@@ -1,6 +1,4 @@
-import 'package:flutter/material.dart' hide Animation;
 import 'package:xml/xml.dart';
-import 'package:path_parsing/path_parsing.dart';
 
 import '../parsing/animated_vector_drawable.dart';
 import '../serializing/animated_vector_drawable.dart';

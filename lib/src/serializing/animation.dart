@@ -1,20 +1,12 @@
-import 'dart:developer';
-
 import 'package:flutter/material.dart' hide Animation;
-import 'package:vector_drawable/src/parsing/resource.dart';
-import 'package:vector_drawable/src/parsing/style.dart';
 import 'package:vector_drawable/src/serializing/resource.dart';
 import 'package:vector_drawable/src/serializing/style.dart';
 import '../model/animation.dart';
 import 'package:xml/xml.dart';
-import 'package:path_parsing/path_parsing.dart';
 
 import '../model/animation.dart';
+import '../model/color.dart';
 import '../model/path.dart';
-import '../model/resource.dart';
-import '../model/vector_drawable.dart';
-import 'animated_vector_drawable.dart';
-import 'exception.dart';
 import 'util.dart';
 
 void _serializeAnimationNode(XmlBuilder b, AnimationNode node) {
@@ -28,11 +20,12 @@ void _serializeAnimationNode(XmlBuilder b, AnimationNode node) {
 }
 
 String _serializeValue(Object value) {
-  if (value is Color) {
+  if (value is VectorColor) {
     return serializeHexColor(value);
   }
   if (value is PathData) {
-    return value.asString;
+    throw UnimplementedError();
+    //return value.asString;
   }
   return value.toString();
 }
@@ -73,6 +66,8 @@ void _serializePropertyValuesHolder(XmlBuilder b, PropertyValuesHolder node) {
   });
 }
 
+Never throwUnimplemented([String? message]) =>
+    throw UnimplementedError(message);
 void _serializeObjectAnimation(XmlBuilder b, ObjectAnimation node) {
   final useHolders = node.valueHolders != null;
   final useCoordinates = node.pathData != null;
@@ -81,7 +76,7 @@ void _serializeObjectAnimation(XmlBuilder b, ObjectAnimation node) {
       b.androidAttribute('propertyXName', node.propertyXName);
       b.androidAttribute('propertyYName', node.propertyYName);
       b.styleOrAndroidAttribute<PathData>('pathData', node.pathData!,
-          stringify: (p) => p.asString);
+          stringify: (p) => throwUnimplemented() /*p.asString*/);
     } else {
       b.androidAttribute('propertyName', node.propertyName);
     }

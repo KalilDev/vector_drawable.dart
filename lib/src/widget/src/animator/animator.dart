@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:vector_drawable/src/model/style.dart';
 import 'package:vector_drawable/vector_drawable.dart';
-import 'package:value_notifier/value_notifier.dart';
+import 'package:value_listenables/value_listenables.dart';
 
 abstract class Animator with Diagnosticable {
   Map<String, StyleResolvable<Object>> values(Duration timeFromStart);

@@ -1,6 +1,3 @@
-import 'package:xml/xml.dart';
-import 'package:xml/src/xml/utils/namespace.dart';
-
 abstract class Clonable<Self> {
   Self clone();
 }

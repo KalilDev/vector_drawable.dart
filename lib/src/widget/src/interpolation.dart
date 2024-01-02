@@ -4,17 +4,45 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide Animation, ClipPath;
 import 'package:flutter/material.dart' as flt show Animation, ClipPath;
 import 'package:flutter/scheduler.dart';
+import 'package:vector_drawable/src/model/diagnostics.dart';
 import 'package:vector_drawable/src/model/style.dart';
 import 'package:path_parsing/path_parsing.dart';
-import 'package:value_notifier/value_notifier.dart';
-import 'package:value_notifier/src/idisposable_change_notifier.dart';
-import 'package:value_notifier/src/handle.dart';
+import 'package:value_listenables/value_listenables.dart';
+import 'package:value_listenables/src/idisposable_change_notifier.dart';
+import 'package:value_listenables/src/handle.dart';
+import 'package:vector_drawable/src/path_utils.dart';
 
 import '../../model/animation.dart';
 import '../../model/path.dart';
+import '../../model/resource.dart';
 import '../../model/vector_drawable.dart';
 
-class SingleStyleResolvable<T> extends StyleResolvable<T> with Diagnosticable {
+class CurveInterpolator extends Interpolator {
+  final Curve curve;
+  CurveInterpolator({
+    required this.curve,
+    ResourceReference? source,
+  }) : super(source);
+
+  static final linear = CurveInterpolator(
+      curve: Curves.linear,
+      source: ResourceReference('anim', 'linear', 'android'));
+  static final easeInOut = CurveInterpolator(
+      curve: Curves.easeInOut,
+      source: ResourceReference('anim', 'accelerate_interpolator', 'android'));
+  static final accelerateCubic = CurveInterpolator(
+      curve: Curves.easeInCubic,
+      source: ResourceReference('interpolator', 'accelerate_cubic', 'android'));
+  static final decelerateCubic = CurveInterpolator(
+      curve: Curves.easeOutCubic,
+      source: ResourceReference('interpolator', 'decelerate_cubic', 'android'));
+
+  @override
+  double transform(double t) => curve.transform(t);
+}
+
+class SingleStyleResolvable<T> extends StyleResolvable<T>
+    with VectorDiagnosticableMixin {
   final T value;
 
   SingleStyleResolvable(this.value);
@@ -169,7 +197,7 @@ Object resolveStyledAs(
         : value;
 
 class _InterpolatedProperty
-    with Diagnosticable
+    with VectorDiagnosticableMixin
     implements StyleResolvable<Object> {
   final Object a;
   final Object b;
@@ -201,7 +229,7 @@ class _InterpolatedProperty
 
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
-    super.debugFillProperties(properties);
+    //super.debugFillProperties(properties);
     if (a == b) {
       properties.add(DiagnosticsProperty('value', a));
       return;
@@ -229,7 +257,7 @@ class CoordinateInterpolation implements ValueTween {
 }
 
 class _CoordinateInterpolatedValue
-    with Diagnosticable
+    with VectorDiagnosticableMixin
     implements StyleResolvable<Object> {
   final StyleOr<PathData> pathData;
   final bool isX;

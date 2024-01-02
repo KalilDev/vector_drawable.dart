@@ -6,6 +6,7 @@ import 'package:xml/xml.dart';
 import 'package:path_parsing/path_parsing.dart';
 import 'package:path_parsing/src/path_segment_type.dart';
 
+import '../model/color.dart';
 import '../model/path.dart';
 import '../model/resource.dart';
 import '../model/vector_drawable.dart';
@@ -28,9 +29,10 @@ Vector _parseVector(XmlElement node) {
     height: _parseDimension(node.getAndroidAttribute('height')!),
     viewportWidth: double.parse(node.getAndroidAttribute('viewportWidth')!),
     viewportHeight: double.parse(node.getAndroidAttribute('viewportHeight')!),
-    tint: node.getStyleOrAndroidAttribute('tint', parse: parseHexColor, defaultValue: Colors.transparent)!,
+    tint: node.getStyleOrAndroidAttribute('tint',
+        parse: parseHexColor, defaultValue: VectorColor.transparent)!,
     tintMode: node.getAndroidAttribute('tintMode')?.map(_parseTintMode) ??
-        BlendMode.srcIn,
+        TintMode.srcIn,
     autoMirrored:
         node.getAndroidAttribute('autoMirrored')?.map(parseBool) ?? false,
     opacity: node.getStyleOrAndroidAttribute(
@@ -52,15 +54,20 @@ Group? _parseGroup(XmlElement node) {
 
   return Group(
     name: node.getAndroidAttribute('name'),
-    rotation: node.getStyleOrAndroidAttribute('rotation', parse: double.parse,defaultValue: 0.0)!,
-    pivotX: node.getStyleOrAndroidAttribute('pivotX', parse: double.parse,defaultValue: 0.0)!,
-    pivotY: node.getStyleOrAndroidAttribute('pivotY', parse: double.parse,defaultValue: 0.0)!,
-    scaleX: node.getStyleOrAndroidAttribute('scaleX', parse: double.parse,defaultValue:1.0)!,
-    scaleY: node.getStyleOrAndroidAttribute('scaleY', parse: double.parse,defaultValue: 1.0)!,
-    translateX:
-        node.getStyleOrAndroidAttribute('translateX', parse: double.parse,defaultValue: 0.0)!,
-    translateY:
-        node.getStyleOrAndroidAttribute('translateY', parse: double.parse,defaultValue: 0.0)!,
+    rotation: node.getStyleOrAndroidAttribute('rotation',
+        parse: double.parse, defaultValue: 0.0)!,
+    pivotX: node.getStyleOrAndroidAttribute('pivotX',
+        parse: double.parse, defaultValue: 0.0)!,
+    pivotY: node.getStyleOrAndroidAttribute('pivotY',
+        parse: double.parse, defaultValue: 0.0)!,
+    scaleX: node.getStyleOrAndroidAttribute('scaleX',
+        parse: double.parse, defaultValue: 1.0)!,
+    scaleY: node.getStyleOrAndroidAttribute('scaleY',
+        parse: double.parse, defaultValue: 1.0)!,
+    translateX: node.getStyleOrAndroidAttribute('translateX',
+        parse: double.parse, defaultValue: 0.0)!,
+    translateY: node.getStyleOrAndroidAttribute('translateY',
+        parse: double.parse, defaultValue: 0.0)!,
     children: node.childElements
         .map(_parseVectorPart)
         .whereType<VectorPart>()
@@ -98,10 +105,10 @@ Path? _parsePath(XmlElement node) {
     name: node.getAndroidAttribute('name'),
     pathData: node.getStyleOrAndroidAttribute('pathData',
         parse: PathData.fromString)!,
-    fillColor:
-        node.getStyleOrAndroidAttribute('fillColor', parse: parseHexColor,defaultValue: Colors.transparent)!,
-    strokeColor:
-        node.getStyleOrAndroidAttribute('strokeColor', parse: parseHexColor,defaultValue: Colors.transparent)!,
+    fillColor: node.getStyleOrAndroidAttribute('fillColor',
+        parse: parseHexColor, defaultValue: VectorColor.transparent)!,
+    strokeColor: node.getStyleOrAndroidAttribute('strokeColor',
+        parse: parseHexColor, defaultValue: VectorColor.transparent)!,
     strokeWidth: node.getStyleOrAndroidAttribute(
       'strokeWidth',
       parse: double.parse,
@@ -158,20 +165,20 @@ VectorPart? _parseVectorPart(XmlElement node) {
   }
 }
 
-BlendMode? _parseTintMode(String tintMode) {
+TintMode? _parseTintMode(String tintMode) {
   switch (tintMode) {
     case 'add':
-      return BlendMode.plus;
+      return TintMode.plus;
     case 'multiply':
-      return BlendMode.multiply;
+      return TintMode.multiply;
     case 'screen':
-      return BlendMode.screen;
+      return TintMode.screen;
     case 'src_atop':
-      return BlendMode.srcATop;
+      return TintMode.srcATop;
     case 'src_in':
-      return BlendMode.srcIn;
+      return TintMode.srcIn;
     case 'src_over':
-      return BlendMode.srcOver;
+      return TintMode.srcOver;
     default:
       return null;
   }

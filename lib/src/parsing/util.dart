@@ -3,6 +3,8 @@ import 'dart:ui';
 import 'package:xml/xml.dart';
 import 'package:xml/src/xml/utils/namespace.dart';
 
+import '../model/color.dart';
+
 const kAndroidXmlNamespace = 'http://schemas.android.com/apk/res/android';
 const kAaptXmlNamespace = 'http://schemas.android.com/aapt';
 
@@ -26,13 +28,13 @@ bool? parseBool(String str) => str == 'true'
         ? false
         : null;
 
-Color parseHexColor(String hex) {
+VectorColor parseHexColor(String hex) {
   if (hex[0] != '#') {
     throw StateError('not hex');
   }
   var str = hex.substring(1);
   if (str.length == 3) {
-    str = '${str[0]}${str[0]}${str[1]}${str[1]}${str[2]}${str[2]}';
+    str = 'FF${str[0]}${str[0]}${str[1]}${str[1]}${str[2]}${str[2]}';
   } else if (str.length == 4) {
     str =
         '${str[0]}${str[0]}${str[1]}${str[1]}${str[2]}${str[2]}${str[3]}${str[3]}';
@@ -45,10 +47,10 @@ Color parseHexColor(String hex) {
   final r = str.substring(2, 4);
   final g = str.substring(4, 6);
   final b = str.substring(6, 8);
-  return Color.fromARGB(
-    int.parse(a, radix: 16),
+  return VectorColor.components(
     int.parse(r, radix: 16),
     int.parse(g, radix: 16),
     int.parse(b, radix: 16),
+    int.parse(a, radix: 16),
   );
 }

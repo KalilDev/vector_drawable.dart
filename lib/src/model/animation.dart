@@ -1,19 +1,16 @@
-import 'dart:ui';
-
-import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
-import 'package:vector_drawable/vector_drawable.dart';
-import 'package:xml/xml.dart';
 import 'package:path_parsing/path_parsing.dart';
+import 'package:path_parsing/src/path_segment_type.dart';
+import 'package:path_parsing/src/path_parsing.dart';
+import 'package:vector_drawable/src/model/diagnostics.dart';
+import 'package:vector_drawable/src/path_evaluator.dart';
+import 'package:vector_drawable/vector_drawable.dart';
+import 'package:vector_math/vector_math_64.dart';
+import 'package:xml/xml.dart';
 
 import '../parsing/animation.dart';
 import '../parsing/interpolator.dart';
 import '../serializing/animation.dart';
 import '../serializing/interpolator.dart';
-import 'animated_vector_drawable.dart';
-import 'path.dart';
-import 'resource.dart';
-import 'vector_drawable.dart';
 
 //https://developer.android.com/guide/topics/resources/animation-resource
 class AnimationResource extends Resource
@@ -42,7 +39,7 @@ class AnimationResource extends Resource
       AnimationResource(AnimationNode.cloneNode(body), source);
 }
 
-abstract class AnimationNode implements Diagnosticable {
+abstract class AnimationNode implements VectorDiagnosticable {
   static AnimationNode cloneNode(AnimationNode node) => node is AnimationSet
       ? node.clone()
       : node is ObjectAnimation
@@ -60,19 +57,19 @@ enum AnimationOrdering {
 }
 
 class AnimationSet extends AnimationNode
-    with DiagnosticableTreeMixin
+    with VectorDiagnosticableTreeMixin
     implements Clonable<AnimationSet> {
   final AnimationOrdering ordering;
   final List<AnimationNode> children;
 
   AnimationSet(this.ordering, this.children);
 
-  @override
-  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
-    super.debugFillProperties(properties);
-    properties.add(EnumProperty('ordering', ordering,
-        defaultValue: AnimationOrdering.together));
-  }
+  // @override
+  // void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+  //   super.debugFillProperties(properties);
+  //   properties.add(EnumProperty('ordering', ordering,
+  //       defaultValue: AnimationOrdering.together));
+  // }
 
   @override
   AnimationSet clone() =>
@@ -97,7 +94,7 @@ enum ValueType {
 }
 
 class PropertyValuesHolder
-    with Diagnosticable
+    with VectorDiagnosticableMixin
     implements Clonable<PropertyValuesHolder> {
   final ValueType valueType;
   final String propertyName;
@@ -115,18 +112,18 @@ class PropertyValuesHolder
     this.keyframes,
   }) : assert((keyframes != null) ^ (valueTo != null));
 
-  @override
-  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
-    super.debugFillProperties(properties);
-    properties.add(EnumProperty('valueType', valueType,
-        defaultValue: ValueType.floatType));
-    properties.add(DiagnosticsProperty('propertyName', propertyName));
-    properties.add(DiagnosticsProperty('valueFrom', valueFrom,
-        ifNull: 'interpolated from drawable'));
-    properties.add(DiagnosticsProperty('valueTo', valueTo,
-        ifNull: 'interpolated from drawable'));
-    properties.add(DiagnosticsProperty('interpolator', interpolator));
-  }
+  // @override
+  // void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+  //   super.debugFillProperties(properties);
+  //   properties.add(EnumProperty('valueType', valueType,
+  //       defaultValue: ValueType.floatType));
+  //   properties.add(DiagnosticsProperty('propertyName', propertyName));
+  //   properties.add(DiagnosticsProperty('valueFrom', valueFrom,
+  //       ifNull: 'interpolated from drawable'));
+  //   properties.add(DiagnosticsProperty('valueTo', valueTo,
+  //       ifNull: 'interpolated from drawable'));
+  //   properties.add(DiagnosticsProperty('interpolator', interpolator));
+  // }
 
   @override
   PropertyValuesHolder clone() => PropertyValuesHolder(
@@ -139,7 +136,7 @@ class PropertyValuesHolder
       );
 }
 
-class Keyframe with Diagnosticable implements Clonable<Keyframe> {
+class Keyframe with VectorDiagnosticableMixin implements Clonable<Keyframe> {
   final ValueType valueType;
   final Object? value;
   final double? fraction;
@@ -151,16 +148,17 @@ class Keyframe with Diagnosticable implements Clonable<Keyframe> {
     this.fraction,
     this.interpolator,
   });
-  @override
-  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
-    super.debugFillProperties(properties);
-    properties.add(EnumProperty('valueType', valueType,
-        defaultValue: ValueType.floatType));
-    properties.add(DiagnosticsProperty('value', value));
-    properties.add(DoubleProperty('fraction', fraction, ifNull: 'uniform'));
-    properties.add(
-        DiagnosticsProperty('interpolator', interpolator, missingIfNull: true));
-  }
+
+  // @override
+  // void debugFillProperties(DiagnosticPropertiesBuilder properties) {
+  //   super.debugFillProperties(properties);
+  //   properties.add(EnumProperty('valueType', valueType,
+  //       defaultValue: ValueType.floatType));
+  //   properties.add(DiagnosticsProperty('value', value));
+  //   properties.add(DoubleProperty('fraction', fraction, ifNull: 'uniform'));
+  //   properties.add(
+  //       DiagnosticsProperty('interpolator', interpolator, missingIfNull: true));
+  // }
 
   @override
   Keyframe clone() => Keyframe(
@@ -180,6 +178,36 @@ class LinearInterpolator extends Interpolator {
   double transform(double t) => t;
 }
 
+final _unitXPathOffset = () {
+  final SvgPathStringSource parser = SvgPathStringSource('M 1 0');
+  return parser.parseSegment().targetPoint;
+}();
+final _unitPathOffset = () {
+  final SvgPathStringSource parser = SvgPathStringSource('M 1 1');
+  return parser.parseSegment().targetPoint;
+}();
+final _unitYPathOffset = () {
+  final SvgPathStringSource parser = SvgPathStringSource('M 0 1');
+  return parser.parseSegment().targetPoint;
+}();
+final _pathOffset =
+    (double dx, double dy) => (_unitXPathOffset * dx) + (_unitYPathOffset * dy);
+PathData _pathDataFromCubicSegment(
+  double controlX1,
+  double controlY1,
+  double controlX2,
+  double controlY2,
+) =>
+    PathData.fromSegments([
+      // TODO: needed?
+      PathSegmentData()..command = SvgPathSegType.moveToAbs,
+      PathSegmentData()
+        ..command = SvgPathSegType.cubicToAbs
+        ..point1 = _pathOffset(controlX1, controlY1)
+        ..point2 = _pathOffset(controlX2, controlY2)
+        ..targetPoint = _unitPathOffset
+    ]);
+
 class PathInterpolator extends Interpolator {
   final PathData pathData;
   PathInterpolator({
@@ -193,33 +221,23 @@ class PathInterpolator extends Interpolator {
     required double controlX2,
     required double controlY2,
     ResourceReference? source,
-  })  : pathData = PathData.fromCubicSegments([
-          StandaloneCubic(
-            Offset.zero,
-            Offset(controlX1, controlY1),
-            Offset(controlX2, controlY2),
-            const Offset(1, 1),
-          ),
-        ]),
+  })  : pathData = _pathDataFromCubicSegment(
+            controlX1, controlY1, controlX2, controlY2),
         super(source);
 
   PathInterpolator.quadratic({
     required double controlX,
     required double controlY,
     ResourceReference? source,
-  })  : pathData = PathData.fromCubicSegments([
-          StandaloneCubic(
-            Offset.zero,
-            Offset(controlX * 1 / 3, controlY * 1 / 3),
-            Offset(controlX * 2 / 3, controlY * 2 / 3),
-            const Offset(1, 1),
-          ),
-        ]),
+  })  : pathData = _pathDataFromCubicSegment(controlX * 1 / 3, controlY * 1 / 3,
+            controlX * 2 / 3, controlY * 2 / 3),
         super(source);
 
   static const int _kPrecisionSteps = 30;
-  late final List<Offset> _vals = List.generate(
-      _kPrecisionSteps, (i) => pathData.evaluateAt(i / _kPrecisionSteps));
+  late final List<Vector2> _vals = List.generate(
+      _kPrecisionSteps,
+      (i) => PathEvaluator.instance
+          .evaluatePathAt(pathData, i / _kPrecisionSteps));
   @override
   double transform(double x) {
     double lastX = 0;
@@ -228,41 +246,19 @@ class PathInterpolator extends Interpolator {
     final it = _vals.iterator;
     while (it.moveNext() && lastX < x) {
       final v = it.current;
-      if (v.dx >= x) {
-        final dtX = (x - lastX) / (v.dx - lastX);
-        final e = lerpDouble(lastY, v.dy, dtX)!;
+      if (v.x >= x) {
+        final dtX = (x - lastX) / (v.x - lastX);
+        final e = _lerpDouble(lastY, v.y, dtX);
         return e;
       }
-      lastX = v.dx;
-      lastY = v.dy;
+      lastX = v.x;
+      lastY = v.y;
     }
     return 1;
   }
 }
 
-class CurveInterpolator extends Interpolator {
-  final Curve curve;
-  CurveInterpolator({
-    required this.curve,
-    ResourceReference? source,
-  }) : super(source);
-
-  static final linear = CurveInterpolator(
-      curve: Curves.linear,
-      source: ResourceReference('anim', 'linear', 'android'));
-  static final easeInOut = CurveInterpolator(
-      curve: Curves.easeInOut,
-      source: ResourceReference('anim', 'accelerate_interpolator', 'android'));
-  static final accelerateCubic = CurveInterpolator(
-      curve: Curves.easeInCubic,
-      source: ResourceReference('interpolator', 'accelerate_cubic', 'android'));
-  static final decelerateCubic = CurveInterpolator(
-      curve: Curves.easeOutCubic,
-      source: ResourceReference('interpolator', 'decelerate_cubic', 'android'));
-
-  @override
-  double transform(double t) => curve.transform(t);
-}
+double _lerpDouble(double a, double b, double t) => a + (b - a) * t;
 
 abstract class Interpolator extends Resource {
   Interpolator(ResourceReference? source) : super(source);
@@ -286,7 +282,7 @@ abstract class Interpolator extends Resource {
 
 /// ObjectAnimator class attributes
 class ObjectAnimation extends AnimationNode
-    with DiagnosticableTreeMixin
+    with VectorDiagnosticableTreeMixin
     implements Clonable<ObjectAnimation> {
   /// Name of the property being animated.
   final String? propertyName;
@@ -331,30 +327,30 @@ class ObjectAnimation extends AnimationNode
     this.valueHolders,
   }) : assert((valueHolders != null) ^ (valueTo != null || pathData != null));
   @override
-  List<DiagnosticsNode> debugDescribeChildren() => valueHolders == null
+  List<VectorDiagnosticsNode> diagnosticsChildren() => valueHolders == null
       ? []
       : valueHolders!.map((e) => e.toDiagnosticsNode()).toList();
 
   @override
-  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
-    super.debugFillProperties(properties);
-    properties.add(DiagnosticsProperty('propertyName', propertyName));
-    properties.add(DiagnosticsProperty('propertyXName', propertyXName));
-    properties.add(DiagnosticsProperty('propertyYName', propertyYName));
-    properties.add(DiagnosticsProperty('pathData', pathData));
-    properties.add(DiagnosticsProperty('duration', duration));
-    properties.add(DiagnosticsProperty('valueFrom', valueFrom));
-    properties.add(DiagnosticsProperty('valueTo', valueTo));
-    properties.add(DiagnosticsProperty('interpolator', interpolator));
-    properties
-        .add(DiagnosticsProperty('startOffset', startOffset, defaultValue: 0));
-    properties
-        .add(DiagnosticsProperty('repeatCount', repeatCount, defaultValue: 0));
-    properties.add(EnumProperty('repeatMode', repeatMode,
-        defaultValue: RepeatMode.repeat));
-    properties.add(EnumProperty('valueType', valueType,
-        defaultValue: ValueType.floatType));
-  }
+  List<VectorProperty> properties() => [
+        VectorNullableProperty<String>('propertyName', propertyName),
+        VectorNullableProperty<String>('propertyXName', propertyXName),
+        VectorNullableProperty<String>('propertyYName', propertyYName),
+        VectorNullableProperty<StyleOr<PathData>>('pathData', pathData),
+        VectorNullableProperty<int>('duration', duration),
+        VectorNullableProperty<StyleOr<Object>>('valueFrom', valueFrom),
+        VectorNullableProperty<StyleOr<Object>>('valueTo', valueTo),
+        VectorNullableProperty<ResourceOrReference<Interpolator>>(
+            'interpolator', interpolator),
+        VectorNullableProperty<int>.withDefault('startOffset', startOffset,
+            defaultValue: 0),
+        VectorNullableProperty<int>.withDefault('repeatCount', repeatCount,
+            defaultValue: 0),
+        VectorEnumProperty<RepeatMode>('repeatMode', repeatMode,
+            defaultValue: RepeatMode.repeat),
+        VectorEnumProperty<ValueType>('valueType', valueType,
+            defaultValue: ValueType.floatType),
+      ];
 
   @override
   ObjectAnimation clone() => ObjectAnimation(

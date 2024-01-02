@@ -3,7 +3,7 @@ import 'dart:developer';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:vector_drawable/src/model/style.dart';
-import 'package:value_notifier/value_notifier.dart';
+import 'package:value_listenables/value_listenables.dart';
 import 'package:vector_drawable/src/widget/src/util.dart';
 import 'package:vector_drawable/vector_drawable.dart';
 

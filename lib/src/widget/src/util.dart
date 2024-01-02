@@ -3,9 +3,9 @@
 import 'package:flutter/foundation.dart';
 
 import 'package:flutter/material.dart' hide Animation, ClipPath;
-import 'package:value_notifier/value_notifier.dart';
-import 'package:value_notifier/src/idisposable_change_notifier.dart';
-import 'package:value_notifier/src/handle.dart';
+import 'package:value_listenables/value_listenables.dart';
+import 'package:value_listenables/src/idisposable_change_notifier.dart';
+import 'package:value_listenables/src/handle.dart';
 
 class StatusValueListenable extends IDisposableValueNotifier<AnimationStatus> {
   final AnimationController _controller;

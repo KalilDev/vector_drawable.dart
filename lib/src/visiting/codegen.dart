@@ -1,6 +1,5 @@
-import 'dart:ui';
-
-import 'package:flutter/material.dart' show Colors;
+import 'package:vector_drawable/src/model/color.dart';
+import 'package:vector_drawable/src/serializing/animation.dart';
 
 import '../model/animated_vector_drawable.dart';
 import '../model/animation.dart';
@@ -200,14 +199,28 @@ void _maybeWriteNamed<T>(String name, StringBuffer context, T arg, T whenNot,
   _writeNamed(name, context, arg, visit);
 }
 
-void _writeStyleNamed<T>(String name, StringBuffer context, StyleOr<T> arg, StringBuffer Function(T, StringBuffer) visit,){
-  _writeNamed<StyleOr<T>>(name, context, arg, (node,context)=>_visitStyleOr(node, context, visit));
+void _writeStyleNamed<T>(
+  String name,
+  StringBuffer context,
+  StyleOr<T> arg,
+  StringBuffer Function(T, StringBuffer) visit,
+) {
+  _writeNamed<StyleOr<T>>(name, context, arg,
+      (node, context) => _visitStyleOr(node, context, visit));
 }
-void _maybeWriteStyleNamed<T>(String name, StringBuffer context, StyleOr<T> arg, T whenNot, StringBuffer Function(T, StringBuffer) visit,){
+
+void _maybeWriteStyleNamed<T>(
+  String name,
+  StringBuffer context,
+  StyleOr<T> arg,
+  T whenNot,
+  StringBuffer Function(T, StringBuffer) visit,
+) {
   if (arg.value == whenNot) {
     return;
   }
-  _writeNamed<StyleOr<T>>(name, context, arg, (node,context)=>_visitStyleOr(node, context, visit));
+  _writeNamed<StyleOr<T>>(name, context, arg,
+      (node, context) => _visitStyleOr(node, context, visit));
 }
 
 StringBuffer _visitDimension(Dimension v, StringBuffer context) {
@@ -289,7 +302,8 @@ StringBuffer _visitStyleOr<T>(
 
 StringBuffer _visitPathData(PathData v, StringBuffer context) {
   context.write('PathData.fromString(');
-  _visitString(v.asString, context);
+  throwUnimplemented();
+  //_visitString(v.asString, context);
   context.write(')');
   return context;
 }
@@ -322,13 +336,14 @@ class CodegenVectorDrawableVisitor extends VectorDrawableVisitor<StringBuffer>
     _writeNamed('viewportWidth', context, node.viewportWidth, _visitStringify);
     _writeNamed(
         'viewportHeight', context, node.viewportHeight, _visitStringify);
-    _maybeWriteStyleNamed('tint', context, node.tint, Colors.transparent, _visitStringify);
+    _maybeWriteStyleNamed(
+        'tint', context, node.tint, VectorColor.transparent, _visitStringify);
     _maybeWriteNamed(
-        'tintMode', context, node.tintMode, BlendMode.srcIn, _visitStringify);
+        'tintMode', context, node.tintMode, TintMode.srcIn, _visitStringify);
     _maybeWriteNamed(
         'autoMirrored', context, node.autoMirrored, false, _visitStringify);
-    _maybeWriteStyleNamed('opacity', context, node.opacity,1.0,
-        _visitStringify);
+    _maybeWriteStyleNamed(
+        'opacity', context, node.opacity, 1.0, _visitStringify);
     context.write('children: [');
     for (final child in node.children) {
       visitVectorPart(child, context);
@@ -361,15 +376,15 @@ class CodegenVectorDrawableVisitor extends VectorDrawableVisitor<StringBuffer>
     context.write('Group(');
     _writeNamedOrNull('name', context, node.name, _visitString);
     _maybeWriteStyleNamed(
-        'rotation', context, node.rotation, 0.0,_visitStringify);
-    _maybeWriteStyleNamed('pivotX', context, node.pivotX, 0.0,_visitStringify);
-    _maybeWriteStyleNamed('pivotY', context, node.pivotY, 0.0,_visitStringify);
-    _maybeWriteStyleNamed('scaleX', context, node.scaleX, 1.0,_visitStringify);
-    _maybeWriteStyleNamed('scaleY', context, node.scaleY, 1.0,_visitStringify);
+        'rotation', context, node.rotation, 0.0, _visitStringify);
+    _maybeWriteStyleNamed('pivotX', context, node.pivotX, 0.0, _visitStringify);
+    _maybeWriteStyleNamed('pivotY', context, node.pivotY, 0.0, _visitStringify);
+    _maybeWriteStyleNamed('scaleX', context, node.scaleX, 1.0, _visitStringify);
+    _maybeWriteStyleNamed('scaleY', context, node.scaleY, 1.0, _visitStringify);
     _maybeWriteStyleNamed(
-        'translateX', context, node.translateX, 0.0,_visitStringify);
+        'translateX', context, node.translateX, 0.0, _visitStringify);
     _maybeWriteStyleNamed(
-        'translateY', context, node.translateY,0.0, _visitStringify);
+        'translateY', context, node.translateY, 0.0, _visitStringify);
     context.write('children: [');
     for (final child in node.children) {
       visitVectorPart(child, context);
@@ -386,22 +401,22 @@ class CodegenVectorDrawableVisitor extends VectorDrawableVisitor<StringBuffer>
     context.write('Path(');
     _writeNamedOrNull('name', context, node.name, _visitString);
     _writeStyleNamed('pathData', context, node.pathData, _visitPathData);
+    _maybeWriteStyleNamed('fillColor', context, node.fillColor,
+        VectorColor.transparent, _visitStringify);
+    _maybeWriteStyleNamed('strokeColor', context, node.strokeColor,
+        VectorColor.transparent, _visitStringify);
     _maybeWriteStyleNamed(
-        'fillColor', context, node.fillColor, Colors.transparent, _visitStringify);
+        'strokeWidth', context, node.strokeWidth, 0.0, _visitStringify);
     _maybeWriteStyleNamed(
-        'strokeColor', context, node.strokeColor, Colors.transparent, _visitStringify);
-    _maybeWriteStyleNamed('strokeWidth', context, node.strokeWidth,
-        0.0, _visitStringify);
-    _maybeWriteStyleNamed('strokeAlpha', context, node.strokeAlpha,
-        1.0, _visitStringify);
-    _maybeWriteStyleNamed('fillAlpha', context, node.fillAlpha,
-        1.0, _visitStringify);
-    _maybeWriteStyleNamed('trimPathStart', context, node.trimPathStart,
-        0.0, _visitStringify);
-    _maybeWriteStyleNamed('trimPathEnd', context, node.trimPathEnd,
-        1.0, _visitStringify);
-    _maybeWriteStyleNamed('trimPathOffset', context, node.trimPathOffset,
-        0.0, _visitStringify);
+        'strokeAlpha', context, node.strokeAlpha, 1.0, _visitStringify);
+    _maybeWriteStyleNamed(
+        'fillAlpha', context, node.fillAlpha, 1.0, _visitStringify);
+    _maybeWriteStyleNamed(
+        'trimPathStart', context, node.trimPathStart, 0.0, _visitStringify);
+    _maybeWriteStyleNamed(
+        'trimPathEnd', context, node.trimPathEnd, 1.0, _visitStringify);
+    _maybeWriteStyleNamed(
+        'trimPathOffset', context, node.trimPathOffset, 0.0, _visitStringify);
     _maybeWriteNamed('strokeLineCap', context, node.strokeLineCap,
         StrokeLineCap.butt, _visitStringify);
     _maybeWriteNamed('strokeLineJoin', context, node.strokeLineJoin,

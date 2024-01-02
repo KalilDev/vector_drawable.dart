@@ -1,15 +1,15 @@
-import 'package:flutter/foundation.dart';
+import 'diagnostics.dart';
 
 abstract class StyleResolver {
   bool containsAny(covariant Iterable<StyleProperty> props);
   T? resolve<T>(StyleProperty property);
 }
 
-abstract class StyleResolvable<T> implements Diagnosticable {
+abstract class StyleResolvable<T> implements VectorDiagnosticable {
   T? resolve(StyleResolver resolver);
 }
 
-class StyleOr<T> with Diagnosticable implements StyleResolvable<T> {
+class StyleOr<T> with VectorDiagnosticableMixin implements StyleResolvable<T> {
   final T? value;
   final StyleProperty? styled;
 
@@ -36,7 +36,7 @@ class StyleOr<T> with Diagnosticable implements StyleResolvable<T> {
       styled != null ? styled.toString() : stringifyValue(value!);
 }
 
-class StyleProperty {
+class StyleProperty extends VectorDiagnosticable {
   final String namespace;
   final String name;
 

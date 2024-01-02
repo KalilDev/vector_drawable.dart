@@ -3,6 +3,10 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide ClipPath;
 import 'package:flutter/rendering.dart';
+import 'package:vector_drawable/src/model/diagnostics.dart';
+import 'package:vector_drawable/src/path_utils.dart';
+import 'package:vector_drawable/src/widget/model_conversion.dart';
+import '../model/color.dart';
 import '../model/path.dart';
 import '../model/style.dart';
 import '../model/vector_drawable.dart';
@@ -34,9 +38,11 @@ class VectorWidget extends StatelessWidget {
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
-    properties.add(DiagnosticsProperty('vector', vector));
-    properties.add(DiagnosticsProperty('styleMapping', styleMapping,
-        defaultValue: StyleMapping.empty));
+    properties.add(DiagnosticsNodeVectorDiagnosticsNodeAdapter(
+        VectorProperty('vector', vector)));
+    properties.add(DiagnosticsNodeVectorDiagnosticsNodeAdapter(VectorProperty(
+        'styleMapping', styleMapping,
+        defaultValue: StyleMapping.empty)));
   }
 
   @override
@@ -46,7 +52,7 @@ class VectorWidget extends StatelessWidget {
       styleMapping: styleMapping.mergeWith(
         ColorSchemeStyleMapping(Theme.of(context).colorScheme),
       ),
-      cachingStrategy: 7,
+      cachingStrategy: 7, // 0b111
     );
   }
 }
@@ -56,7 +62,7 @@ class RawVectorWidget extends LeafRenderObjectWidget {
     Key? key,
     required this.vector,
     required this.styleMapping,
-    this.cachingStrategy = 0,
+    this.cachingStrategy = 0, // 0b000
   }) : super(key: key);
 
   final Vector vector;
@@ -419,15 +425,17 @@ class _PathValues {
 
   _PathValues(
     PathData pathData,
-    this.fillColor,
-    this.strokeColor,
+    VectorColor fillColor,
+    VectorColor strokeColor,
     this.strokeWidth,
     this.strokeAlpha,
     this.fillAlpha,
     double trimPathStart,
     double trimPathEnd,
     double trimPathOffset,
-  ) : pathData = _uiPathForPath(pathData.segmentsFrom(
+  )   : fillColor = colorFromVectorColor(fillColor),
+        strokeColor = colorFromVectorColor(strokeColor),
+        pathData = _uiPathForPath(pathData.segmentsFrom(
           (trimPathStart + trimPathOffset)
               .clamp(0.0, (trimPathEnd + trimPathOffset).clamp(0.0, 1.0)),
           (trimPathEnd + trimPathOffset).clamp(0.0, 1.0),
@@ -459,9 +467,13 @@ Set<RenderVectorCache> _setFromFlags(int flags) => {
       if (_cacheGroup(flags)) RenderVectorCache.group,
       if (_cachePath(flags)) RenderVectorCache.path,
     };
-bool _cacheClipPath(int cacheFlags) => (cacheFlags & 1) == 1;
-bool _cacheGroup(int cacheFlags) => (cacheFlags & 2) == 2;
-bool _cachePath(int cacheFlags) => (cacheFlags & 4) == 4;
+const int _ClipPathFlag = 1;
+const int _GroupFlag = 2;
+const int _PathFlag = 4;
+bool _cacheClipPath(int cacheFlags) =>
+    (cacheFlags & _ClipPathFlag) == _ClipPathFlag;
+bool _cacheGroup(int cacheFlags) => (cacheFlags & _GroupFlag) == _GroupFlag;
+bool _cachePath(int cacheFlags) => (cacheFlags & _PathFlag) == _PathFlag;
 
 enum RenderVectorCache {
   clipPath,
@@ -635,6 +647,7 @@ class RenderVector extends RenderBox {
   }
 
   @override
+  // TODO: check that the position hits the vector
   bool hitTestSelf(Offset position) => true;
 
   @override
@@ -681,14 +694,14 @@ class RenderVector extends RenderBox {
     }
 
     final transform = values.transform;
-    if (transform != null) {
-      canvas.save();
-      canvas.transform(transform.storage);
+    if (transform == null) {
       _paintChildren(canvas, group.children);
-      canvas.restore();
-    } else {
-      _paintChildren(canvas, group.children);
+      return;
     }
+    canvas.save();
+    canvas.transform(transform.storage);
+    _paintChildren(canvas, group.children);
+    canvas.restore();
   }
 
   // TODO: trimPathStart, trimPathEnd, trimPathOffset, fillType
@@ -733,6 +746,7 @@ class RenderVector extends RenderBox {
       values = _ClipPathValues(path.pathData.resolve(styleMapping)!);
     }
     final uiPath = values.pathData;
+    // android does not save and restore the canvas
     canvas.clipPath(uiPath);
     _paintChildren(canvas, path.children);
   }
@@ -769,9 +783,6 @@ class RenderVector extends RenderBox {
         path.trimPathEnd.resolve(styleMapping)!,
         path.trimPathOffset.resolve(styleMapping)!,
       );
-    }
-    if (values.strokeColor == null && values.fillColor == null) {
-      return;
     }
 
     if (values.strokeColor == Colors.transparent &&
@@ -818,7 +829,8 @@ class RenderVector extends RenderBox {
     }
     var heightScale = size.height / vector.viewportHeight;
     transform.scale(widthScale, heightScale);
-    final vectorTint = vector.tint.resolve(styleMapping) ?? Colors.transparent;
+    final vectorTint =
+        vector.tint.resolve(styleMapping) ?? VectorColor.transparent;
     context.pushTransform(
       needsCompositing,
       offset,
@@ -831,13 +843,15 @@ class RenderVector extends RenderBox {
           canvas.saveLayer(
               null,
               Paint()
-                ..color = vectorTint
-                ..blendMode = vector.tintMode);
+                ..color = vectorTint.asColor
+                ..blendMode = vector.tintMode.asBlendMode);
         }
         _paintChildren(canvas, vector.children);
         if (vectorTint != Colors.transparent) {
+          // canvas.saveLayer
           canvas.restore();
         }
+        // canvas.translate
         canvas.restore();
       },
     );
@@ -847,15 +861,23 @@ class RenderVector extends RenderBox {
   void paint(PaintingContext context, Offset offset) {
     final vectorAlpha =
         ((vector.opacity.resolve(styleMapping) ?? 1.0) * 255).toInt();
+
     if (vectorAlpha != 255) {
       context.pushOpacity(
         offset,
         vectorAlpha,
         _paintWithOpacity,
       );
-    } else {
-      _paintWithOpacity(context, offset);
+      return;
     }
+
+    if (vectorAlpha != 0) {
+      _paintWithOpacity(context, offset);
+      return;
+    }
+
+    // fall thruogh, we dont need an opacity layer, and we dont need to paint
+    // because the opacity is zero, therefore the vector is invisible
   }
 }
 
