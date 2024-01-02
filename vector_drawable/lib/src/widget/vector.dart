@@ -53,6 +53,30 @@ class VectorWidget extends StatelessWidget {
   }
 }
 
+class _VectorColorAdapterStyleResolver implements StyleResolver {
+  final StyleResolver base;
+
+  _VectorColorAdapterStyleResolver(this.base);
+  @override
+  bool containsAny(covariant Iterable<StyleProperty> props) {
+    return base.containsAny(props);
+  }
+
+  @override
+  T? resolve<T>(StyleProperty property) {
+    if (T == VectorColor) {
+      try {
+        // First try to resolve as an flutter color
+        return base.resolve<Color>(property)?.asVectorColor as T?;
+      } on TypeError {
+        // Then try to resolve as an vector color
+        return base.resolve<T>(property);
+      }
+    }
+    return base.resolve(property);
+  }
+}
+
 class RawVectorWidget extends LeafRenderObjectWidget {
   const RawVectorWidget({
     Key? key,
@@ -493,7 +517,7 @@ class RenderVector extends RenderBox {
         _devicePixelRatio = devicePixelRatio,
         _textScaleFactor = textScaleFactor,
         _textDirection = textDirection,
-        _styleMapping = styleMapping,
+        _styleMapping = _VectorColorAdapterStyleResolver(styleMapping),
         _cachingStrategy = cachingStrategy;
 
   Vector _vector;
@@ -547,10 +571,10 @@ class RenderVector extends RenderBox {
     _textDirection = textDirection;
   }
 
-  StyleResolver _styleMapping;
+  _VectorColorAdapterStyleResolver _styleMapping;
   StyleResolver get styleMapping => _styleMapping;
   set styleMapping(StyleResolver styleMapping) {
-    if (_styleMapping == styleMapping) {
+    if (_styleMapping.base == styleMapping) {
       return;
     }
 
@@ -584,7 +608,7 @@ class RenderVector extends RenderBox {
     } else {
       markNeedsPaint();
     }
-    _styleMapping = styleMapping;
+    _styleMapping = _VectorColorAdapterStyleResolver(styleMapping);
   }
 
   int _cachingStrategy;
@@ -789,15 +813,13 @@ class RenderVector extends RenderBox {
     final uiPath = values.pathData;
     if (values.fillColor != Colors.transparent) {
       paint
-        ..color = values.fillColor?.withOpacity(values.fillAlpha) ??
-            Colors.transparent
+        ..color = values.fillColor.withOpacity(values.fillAlpha)
         ..style = PaintingStyle.fill;
       canvas.drawPath(uiPath, paint);
     }
     if (values.strokeColor != Colors.transparent) {
       paint
-        ..color = values.strokeColor?.withOpacity(values.strokeAlpha) ??
-            Colors.transparent
+        ..color = values.strokeColor.withOpacity(values.strokeAlpha)
         ..style = PaintingStyle.stroke;
       canvas.drawPath(uiPath, paint);
     }

@@ -12,7 +12,7 @@ extension VectorColorAsColor on VectorColor {
 }
 
 extension ColorAsVectorColor on Color {
-  VectorColor get asColor => vectorColorFromColor(this);
+  VectorColor get asVectorColor => vectorColorFromColor(this);
 }
 
 class DiagnosticsNodeVectorDiagnosticsNodeAdapter extends DiagnosticsNode {

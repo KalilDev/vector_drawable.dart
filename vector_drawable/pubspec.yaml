@@ -1,7 +1,7 @@
 name: vector_drawable
 description: A vector drawable package for flutter
-version: 0.2.0
-homepage:
+version: 0.1.0-testing.0
+homepage: https://github.com/kalildev/vector_drawable.dart 
 
 environment:
   sdk: ">=2.16.0 <3.0.0"
@@ -10,12 +10,11 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  value_listenables:
-  vector_math:
+  value_listenables: ^0.0.2-prerelease.20
+  vector_math: ^2.0.0
   xml: ^5.3.1
   path_parsing: ^1.0.0
-  vector_drawable_core:
-    path: ../vector_drawable_core
+  vector_drawable_core: ^0.0.1-testing.0
 
 dev_dependencies:
   flutter_test:
