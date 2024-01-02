@@ -1,0 +1,1 @@
+An package for using VectorDrawables and AnimatedVectorDrawables in flutter
