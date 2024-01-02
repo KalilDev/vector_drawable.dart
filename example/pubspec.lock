@@ -5,49 +5,49 @@ packages:
     dependency: transitive
     description:
       name: async
-      url: "http://192.168.1.157:4000"
+      url: "https://pub.dartlang.org"
     source: hosted
     version: "2.9.0"
   boolean_selector:
     dependency: transitive
     description:
       name: boolean_selector
-      url: "http://192.168.1.157:4000"
+      url: "https://pub.dartlang.org"
     source: hosted
     version: "2.1.0"
   characters:
     dependency: transitive
     description:
       name: characters
-      url: "http://192.168.1.157:4000"
+      url: "https://pub.dartlang.org"
     source: hosted
     version: "1.2.1"
   clock:
     dependency: transitive
     description:
       name: clock
-      url: "http://192.168.1.157:4000"
+      url: "https://pub.dartlang.org"
     source: hosted
     version: "1.1.1"
   collection:
     dependency: transitive
     description:
       name: collection
-      url: "http://192.168.1.157:4000"
+      url: "https://pub.dartlang.org"
     source: hosted
     version: "1.16.0"
   cupertino_icons:
     dependency: "direct main"
     description:
       name: cupertino_icons
-      url: "http://192.168.1.157:4000"
+      url: "https://pub.dartlang.org"
     source: hosted
     version: "1.0.5"
   fake_async:
     dependency: transitive
     description:
       name: fake_async
-      url: "http://192.168.1.157:4000"
+      url: "https://pub.dartlang.org"
     source: hosted
     version: "1.3.1"
   flutter:
@@ -59,7 +59,7 @@ packages:
     dependency: "direct dev"
     description:
       name: flutter_lints
-      url: "http://192.168.1.157:4000"
+      url: "https://pub.dartlang.org"
     source: hosted
     version: "1.0.4"
   flutter_test:
@@ -71,51 +71,51 @@ packages:
     dependency: transitive
     description:
       name: lints
-      url: "http://192.168.1.157:4000"
+      url: "https://pub.dartlang.org"
     source: hosted
     version: "1.0.1"
   matcher:
     dependency: transitive
     description:
       name: matcher
-      url: "http://192.168.1.157:4000"
+      url: "https://pub.dartlang.org"
     source: hosted
-    version: "0.12.11"
+    version: "0.12.12"
   material_color_utilities:
     dependency: transitive
     description:
       name: material_color_utilities
-      url: "http://192.168.1.157:4000"
+      url: "https://pub.dartlang.org"
     source: hosted
     version: "0.1.5"
   meta:
     dependency: transitive
     description:
       name: meta
-      url: "http://192.168.1.157:4000"
+      url: "https://pub.dartlang.org"
     source: hosted
     version: "1.8.0"
   path:
     dependency: transitive
     description:
       name: path
-      url: "http://192.168.1.157:4000"
+      url: "https://pub.dartlang.org"
     source: hosted
     version: "1.8.2"
   path_parsing:
     dependency: "direct main"
     description:
       name: path_parsing
-      url: "http://192.168.1.157:4000"
+      url: "https://pub.dartlang.org"
     source: hosted
     version: "1.0.1"
   petitparser:
     dependency: transitive
     description:
       name: petitparser
-      url: "http://192.168.1.157:4000"
+      url: "https://pub.dartlang.org"
     source: hosted
-    version: "5.0.0"
+    version: "5.1.0"
   sky_engine:
     dependency: transitive
     description: flutter
@@ -125,49 +125,49 @@ packages:
     dependency: transitive
     description:
       name: source_span
-      url: "http://192.168.1.157:4000"
+      url: "https://pub.dartlang.org"
     source: hosted
     version: "1.9.0"
   stack_trace:
     dependency: transitive
     description:
       name: stack_trace
-      url: "http://192.168.1.157:4000"
+      url: "https://pub.dartlang.org"
     source: hosted
     version: "1.10.0"
   stream_channel:
     dependency: transitive
     description:
       name: stream_channel
-      url: "http://192.168.1.157:4000"
+      url: "https://pub.dartlang.org"
     source: hosted
     version: "2.1.0"
   string_scanner:
     dependency: transitive
     description:
       name: string_scanner
-      url: "http://192.168.1.157:4000"
+      url: "https://pub.dartlang.org"
     source: hosted
     version: "1.1.1"
   term_glyph:
     dependency: transitive
     description:
       name: term_glyph
-      url: "http://192.168.1.157:4000"
+      url: "https://pub.dartlang.org"
     source: hosted
     version: "1.2.1"
   test_api:
     dependency: transitive
     description:
       name: test_api
-      url: "http://192.168.1.157:4000"
+      url: "https://pub.dartlang.org"
     source: hosted
-    version: "0.4.9"
-  value_notifier:
+    version: "0.4.12"
+  value_listenables:
     dependency: "direct main"
     description:
-      name: value_notifier
-      url: "http://192.168.1.157:4000"
+      name: value_listenables
+      url: "https://pub.dartlang.org"
     source: hosted
     version: "0.0.2-prerelease.20"
   vector_drawable:
@@ -176,21 +176,21 @@ packages:
       path: ".."
       relative: true
     source: path
-    version: "0.0.1-testing.0"
+    version: "0.0.1"
   vector_math:
     dependency: transitive
     description:
       name: vector_math
-      url: "http://192.168.1.157:4000"
+      url: "https://pub.dartlang.org"
     source: hosted
     version: "2.1.2"
   xml:
     dependency: "direct main"
     description:
       name: xml
-      url: "http://192.168.1.157:4000"
+      url: "https://pub.dartlang.org"
     source: hosted
     version: "5.4.1"
 sdks:
-  dart: ">=2.17.0-0 <3.0.0"
+  dart: ">=2.18.0 <3.0.0"
   flutter: ">=1.17.0"

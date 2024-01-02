@@ -178,7 +178,7 @@ final avd_tab_stopwatch_white_24dp = AnimatedVectorDrawable(
       ],
     ),
     ResourceReference(r'drawable', r'avd_tab_stopwatch_white_24dp'));
-  
+
 final avd_tab_clock_white_24dp = AnimatedVectorDrawable(
     AnimatedVector(
       ResourceOrReference(
@@ -5963,7 +5963,6 @@ final avd_bedtime_onboarding_graphic = AnimatedVectorDrawable(
       ],
     ),
     ResourceReference(r'drawable', r'avd_bedtime_onboarding_graphic'));
-
 
 final drawable = AnimatedVectorDrawable(
     AnimatedVector(

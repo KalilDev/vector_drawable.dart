@@ -16,7 +16,7 @@ class _MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-    theme: ThemeData.dark(),
+        theme: ThemeData.dark(),
         home: Material(
             color: Colors.black,
             child: Center(
@@ -29,10 +29,10 @@ class _TestVectorWidget extends StatefulWidget {
   const _TestVectorWidget({Key? key}) : super(key: key);
 
   @override
-  State<_TestVectorWidget> createState() => _TestVectorWidgetState();
+  State<_TestVectorWidget> createState() => TestVectorWidgetState();
 }
 
-class _TestVectorWidgetState extends State<_TestVectorWidget> {
+class TestVectorWidgetState extends State<_TestVectorWidget> {
   final animatedVectorKey = GlobalKey<AnimatedVectorState>();
   int _drawableIndex = 6;
   bool _animated = true;
