@@ -7,7 +7,7 @@ environment:
   sdk: '>=2.18.2 <3.0.0'
 
 dependencies:
-  vector_math:
+  vector_math: ^2.0.0
   xml: ^5.3.1
   path_parsing: ^1.0.0
 
