@@ -1,6 +1,6 @@
 name: vector_drawable
 description: A vector drawable package for flutter
-version: 0.1.0-testing.0
+version: 0.1.0-testing.1
 homepage: https://github.com/kalildev/vector_drawable.dart 
 
 environment:
