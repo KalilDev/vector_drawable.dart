@@ -22,7 +22,7 @@ String _serializeValue(Object value) {
     return serializeHexColor(value);
   }
   if (value is PathData) {
-    throwUnimplemented();
+    return value.toPathDataString(needsSameInput: true);
   }
   return value.toString();
 }
@@ -72,7 +72,7 @@ void _serializeObjectAnimation(XmlBuilder b, ObjectAnimation node) {
       b.androidAttribute('propertyXName', node.propertyXName);
       b.androidAttribute('propertyYName', node.propertyYName);
       b.styleOrAndroidAttribute<PathData>('pathData', node.pathData!,
-          stringify: (p) => throwUnimplemented() /*p.asString*/);
+          stringify: (p) => p.toPathDataString(needsSameInput: true));
     } else {
       b.androidAttribute('propertyName', node.propertyName);
     }

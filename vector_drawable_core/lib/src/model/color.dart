@@ -32,10 +32,12 @@ class VectorColor {
                 (g << _gShift) |
                 (b << _bShift)) &
             _colorMask;
-  static const transparent = VectorColor.rgba(0);
+  static const transparent = VectorColor.argb(0);
   int get alpha => (argb >> _aShift) & _componentMask;
   int get red => (argb >> _rShift) & _componentMask;
   int get green => (argb >> _gShift) & _componentMask;
   int get blue => (argb >> _bShift) & _componentMask;
   double get opacity => alpha / _maxComponent;
+  String toString() =>
+      'VectorColor(0x${argb.toRadixString(16).padLeft(8, '0')})';
 }

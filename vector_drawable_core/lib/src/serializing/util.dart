@@ -24,7 +24,7 @@ extension AndroidXmlBuilderE on XmlBuilder {
 String serializeEnum<T extends Enum>(T value) => value.name;
 
 String serializeHexColor(VectorColor color) => '#'
-    '${color.alpha.toRadixString(16)}'
-    '${color.red.toRadixString(16)}'
-    '${color.green.toRadixString(16)}'
-    '${color.blue.toRadixString(16)}';
+    //'${color.alpha.toRadixString(16).padLeft(2, '0')}'
+    '${color.red.toRadixString(16).padLeft(2, '0')}'
+    '${color.green.toRadixString(16).padLeft(2, '0')}'
+    '${color.blue.toRadixString(16).padLeft(2, '0')}';

@@ -4,7 +4,7 @@ import 'package:xml/xml.dart';
 import 'util.dart';
 
 extension XmlStyleBuilderE on XmlBuilder {
-  void styleOrAttribute<T>(
+  void styleOrAttribute<T extends Object>(
     String name,
     StyleOr<T>? value, {
     String Function(T) stringify = StyleOr.defaultStringifyValue,
@@ -21,7 +21,7 @@ extension XmlStyleBuilderE on XmlBuilder {
     );
   }
 
-  void styleOrAndroidAttribute<T>(
+  void styleOrAndroidAttribute<T extends Object>(
     String name,
     StyleOr<T>? value, {
     String Function(T) stringify = StyleOr.defaultStringifyValue,

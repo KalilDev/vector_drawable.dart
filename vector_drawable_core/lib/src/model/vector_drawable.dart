@@ -1,3 +1,9 @@
+// ignore_for_file: deprecated_member_use_from_same_package
+
+import 'dart:collection';
+
+import 'package:vector_drawable_core/vector_drawable_core.dart';
+
 import 'path.dart';
 import 'style.dart';
 import '../serializing/vector_drawable.dart';
@@ -16,7 +22,7 @@ class Dimension extends VectorDiagnosticable {
   final double value;
   final DimensionKind kind;
 
-  Dimension(this.value, this.kind);
+  const Dimension(this.value, this.kind);
   @override
   String toString() => '$value${kind.name}';
 
@@ -56,22 +62,50 @@ class VectorDrawable extends Resource {
 
   static void serializeElement(XmlBuilder b, VectorDrawable drawable) =>
       serializeVectorDrawable(b, drawable);
+
+  R accept<R, Context>(VectorDrawableRawVisitor<R, Context> visitor,
+          [Context? context]) =>
+      visitor.visitVectorDrawable(this, context);
 }
+
+/*extension ExpandoPutIfAbsent<T extends Object> on Expando<T> {
+  T putIfAbsent(Object obj, T Function() ifAbsent) {
+    final res = this[obj];
+    if (res != null) {
+      return res;
+    }
+    return this[obj] = ifAbsent();
+  }
+}*/
+
+final Expando<Set<StyleProperty>> _usedStylesExpando =
+    Expando('VectorDrawableNode.usedStyles');
+
+final Expando<List<ValueOrProperty<Object>>> _localValuesOrPropertiesExpando =
+    Expando('VectorDrawableNode.localValuesOrProperties');
 
 // https://developer.android.com/reference/android/graphics/drawable/VectorDrawable
 abstract class VectorDrawableNode implements VectorDiagnosticable {
   final String? name;
-  VectorDrawableNode({
+  const VectorDrawableNode({
     this.name,
   });
   Iterable<StyleProperty> get _usedStyles;
-  Iterable<StyleProperty> get _localUsedStyles;
-  late final Set<StyleProperty> localUsedStyles = _localUsedStyles.toSet();
-  late final Set<StyleProperty> usedStyles = _usedStyles.toSet();
+  List<ValueOrProperty<Object>> get _localValuesOrProperties;
+  List<ValueOrProperty<Object>> get localValuesOrProperties =>
+      _localValuesOrPropertiesExpando.putIfAbsent(
+          this, () => UnmodifiableListView(_localValuesOrProperties));
+  Set<StyleProperty> get usedStyles =>
+      _usedStylesExpando.putIfAbsent(this, _usedStyles.toSet);
+  R accept<R, Context>(VectorDrawableNodeRawVisitor<R, Context> visitor,
+      [Context? context]);
 }
 
 abstract class VectorPart extends VectorDrawableNode {
-  VectorPart({required String? name}) : super(name: name);
+  const VectorPart({required String? name}) : super(name: name);
+  @override
+  R accept<R, Context>(VectorDrawablePartRawVisitor<R, Context> visitor,
+      [Context? context]);
 }
 
 class Vector extends VectorDrawableNode with VectorDiagnosticableTreeMixin {
@@ -85,19 +119,18 @@ class Vector extends VectorDrawableNode with VectorDiagnosticableTreeMixin {
   final StyleOr<double> opacity;
   final List<VectorPart> children;
 
-  Vector({
+  const Vector({
     String? name,
     required this.width,
     required this.height,
     required this.viewportWidth,
     required this.viewportHeight,
-    this.tint = const StyleOr.value(VectorColor.transparent),
+    this.tint = const Value<VectorColor>(VectorColor.transparent),
     this.tintMode = TintMode.srcIn,
     this.autoMirrored = false,
-    this.opacity = const StyleOr.value(1.0),
+    this.opacity = const Value<double>(1.0),
     required this.children,
   }) : super(name: name);
-
   @override
   List<VectorDiagnosticsNode> diagnosticsChildren() =>
       children.map((e) => e.toDiagnosticsNode()).toList();
@@ -127,6 +160,17 @@ class Vector extends VectorDrawableNode with VectorDiagnosticableTreeMixin {
       children.expand((e) => e._usedStyles).followedBy(_localUsedStyles);
 
   @override
+  List<ValueOrProperty<Object>> get _localValuesOrProperties => [
+        tint,
+        opacity,
+      ];
+
+  static const List<String> stylablePropertyNames = [
+    'tint',
+    'opacity',
+  ];
+
+  @override
   Iterable<StyleProperty> get _localUsedStyles => [
         if (tint.styled != null) tint.styled!,
         if (opacity.styled != null) opacity.styled!,
@@ -134,13 +178,17 @@ class Vector extends VectorDrawableNode with VectorDiagnosticableTreeMixin {
   @override
   VectorDiagnosticsNode toDiagnosticsNode([String? name]) =>
       super.toDiagnosticsNode(this.name);
+  @override
+  R accept<R, Context>(VectorDrawableNodeRawVisitor<R, Context> visitor,
+          [Context? context]) =>
+      visitor.visitVector(this, context);
 }
 
 class ClipPath extends VectorPart with VectorDiagnosticableTreeMixin {
   final StyleOr<PathData> pathData;
   final List<VectorPart> children;
 
-  ClipPath({
+  const ClipPath({
     String? name,
     required this.pathData,
     required this.children,
@@ -149,6 +197,14 @@ class ClipPath extends VectorPart with VectorDiagnosticableTreeMixin {
   @override
   Iterable<StyleProperty> get _usedStyles =>
       _localUsedStyles.followedBy(children.expand((e) => e._usedStyles));
+
+  @override
+  List<ValueOrProperty<Object>> get _localValuesOrProperties => [pathData];
+
+  static const List<String> stylablePropertyNames = [
+    'pathData',
+  ];
+
   @override
   Iterable<StyleProperty> get _localUsedStyles => [
         if (pathData.styled != null) pathData.styled!,
@@ -166,6 +222,11 @@ class ClipPath extends VectorPart with VectorDiagnosticableTreeMixin {
   @override
   VectorDiagnosticsNode toDiagnosticsNode([String? name]) =>
       super.toDiagnosticsNode(this.name);
+
+  @override
+  R accept<R, Context>(VectorDrawablePartRawVisitor<R, Context> visitor,
+          [Context? context]) =>
+      visitor.visitClipPath(this, context);
 }
 
 class Group extends VectorPart with VectorDiagnosticableTreeMixin {
@@ -178,15 +239,15 @@ class Group extends VectorPart with VectorDiagnosticableTreeMixin {
   final StyleOr<double> translateY;
   final List<VectorPart> children;
 
-  Group({
+  const Group({
     String? name,
-    this.rotation = const StyleOr.value(0.0),
-    this.pivotX = const StyleOr.value(0.0),
-    this.pivotY = const StyleOr.value(0.0),
-    this.scaleX = const StyleOr.value(1.0),
-    this.scaleY = const StyleOr.value(1.0),
-    this.translateX = const StyleOr.value(0.0),
-    this.translateY = const StyleOr.value(0.0),
+    this.rotation = const Value<double>(0.0),
+    this.pivotX = const Value<double>(0.0),
+    this.pivotY = const Value<double>(0.0),
+    this.scaleX = const Value<double>(1.0),
+    this.scaleY = const Value<double>(1.0),
+    this.translateX = const Value<double>(0.0),
+    this.translateY = const Value<double>(0.0),
     required this.children,
   }) : super(name: name);
 
@@ -226,9 +287,36 @@ class Group extends VectorPart with VectorDiagnosticableTreeMixin {
         if (translateX.styled != null) translateX.styled!,
         if (translateY.styled != null) translateY.styled!,
       ];
+
+  @override
+  List<ValueOrProperty<Object>> get _localValuesOrProperties => [
+        rotation,
+        pivotX,
+        pivotY,
+        scaleX,
+        scaleY,
+        translateX,
+        translateY,
+      ];
+
+  static const List<String> stylablePropertyNames = [
+    'rotation',
+    'pivotX',
+    'pivotY',
+    'scaleX',
+    'scaleY',
+    'translateX',
+    'translateY',
+  ];
+
   @override
   VectorDiagnosticsNode toDiagnosticsNode([String? name]) =>
       super.toDiagnosticsNode(this.name);
+
+  @override
+  R accept<R, Context>(VectorDrawablePartRawVisitor<R, Context> visitor,
+          [Context? context]) =>
+      visitor.visitGroup(this, context);
 }
 
 enum FillType { nonZero, evenOdd }
@@ -260,20 +348,20 @@ class Path extends VectorPart with VectorDiagnosticableMixin {
   final double strokeMiterLimit;
   final FillType fillType;
 
-  Path({
+  const Path({
     String? name,
     required this.pathData,
-    this.fillColor = const StyleOr.value(VectorColor.transparent),
-    this.strokeColor = const StyleOr.value(VectorColor.transparent),
-    this.strokeWidth = const StyleOr.value(0),
-    this.strokeAlpha = const StyleOr.value(1),
-    this.fillAlpha = const StyleOr.value(1),
-    this.trimPathStart = const StyleOr.value(0),
-    this.trimPathEnd = const StyleOr.value(1),
-    this.trimPathOffset = const StyleOr.value(0),
+    this.fillColor = const Value<VectorColor>(VectorColor.transparent),
+    this.strokeColor = const Value<VectorColor>(VectorColor.transparent),
+    this.strokeWidth = const Value<double>(0.0),
+    this.strokeAlpha = const Value<double>(1.0),
+    this.fillAlpha = const Value<double>(1.0),
+    this.trimPathStart = const Value<double>(0.0),
+    this.trimPathEnd = const Value<double>(1.0),
+    this.trimPathOffset = const Value<double>(0.0),
     this.strokeLineCap = StrokeLineCap.butt,
     this.strokeLineJoin = StrokeLineJoin.miter,
-    this.strokeMiterLimit = 4,
+    this.strokeMiterLimit = 4.0,
     this.fillType = FillType.nonZero,
   }) : super(name: name);
 
@@ -324,7 +412,38 @@ class Path extends VectorPart with VectorDiagnosticableMixin {
         if (trimPathEnd.styled != null) trimPathEnd.styled!,
         if (trimPathOffset.styled != null) trimPathOffset.styled!,
       ];
+
+  @override
+  List<ValueOrProperty<Object>> get _localValuesOrProperties => [
+        pathData,
+        fillColor,
+        strokeColor,
+        strokeWidth,
+        strokeAlpha,
+        fillAlpha,
+        trimPathStart,
+        trimPathEnd,
+        trimPathOffset,
+      ];
+
+  static const List<String> stylablePropertyNames = [
+    'pathData',
+    'fillColor',
+    'strokeColor',
+    'strokeWidth',
+    'strokeAlpha',
+    'fillAlpha',
+    'trimPathStart',
+    'trimPathEnd',
+    'trimPathOffset',
+  ];
+
   @override
   VectorDiagnosticsNode toDiagnosticsNode([String? name]) =>
       super.toDiagnosticsNode(this.name);
+
+  @override
+  R accept<R, Context>(VectorDrawablePartRawVisitor<R, Context> visitor,
+          [Context? context]) =>
+      visitor.visitPath(this, context);
 }

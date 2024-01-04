@@ -198,7 +198,7 @@ void _maybeWriteNamed<T>(String name, StringBuffer context, T arg, T whenNot,
   _writeNamed(name, context, arg, visit);
 }
 
-void _writeStyleNamed<T>(
+void _writeStyleNamed<T extends Object>(
   String name,
   StringBuffer context,
   StyleOr<T> arg,
@@ -208,7 +208,7 @@ void _writeStyleNamed<T>(
       (node, context) => _visitStyleOr(node, context, visit));
 }
 
-void _maybeWriteStyleNamed<T>(
+void _maybeWriteStyleNamed<T extends Object>(
   String name,
   StringBuffer context,
   StyleOr<T> arg,
@@ -278,36 +278,45 @@ StringBuffer _visitStyleOrStringify(
   StringBuffer context,
 ) =>
     _visitStyleOr(node, context, _visitStringify);
-StringBuffer _visitStyleOr<T>(
+StringBuffer _visitStyleOr<T extends Object>(
   StyleOr<T> node,
   StringBuffer context,
   StringBuffer Function(T, StringBuffer) visit,
 ) {
-  context.write('StyleOr');
-  if (node.styled == null) {
-    context.write('.value(');
-    visit(node.value!, context);
-  } else {
-    context.write('.style(');
-    context.write('StyleProperty(');
-    _visitString(node.styled!.namespace, context);
-    context.write(', ');
-    _visitString(node.styled!.name, context);
+  if (node is Value<T>) {
+    context.write('Value<');
+    context.write(T);
+    context.write('>(');
+    visit(node.value, context);
     context.write(')');
+    return context;
   }
-  context.write(')');
-  return context;
+  if (node is Property<T>) {
+    context.write('Property<');
+    context.write(T);
+    context.write('>(');
+    context.write('StyleProperty(');
+    _visitString(node.property.namespace, context);
+    context.write(', ');
+    _visitString(node.property.name, context);
+    context.write(')');
+    context.write(')');
+    return context;
+  }
+  throw TypeError();
 }
 
 StringBuffer _visitPathData(PathData v, StringBuffer context) {
-  context.write('PathData.fromString(');
-  throwUnimplemented();
-  //_visitString(v.asString, context);
+  context.write('PathData.fromStringRaw(');
+  _visitString(
+      PathData.removeTrailingCubic(v.toPathDataString(needsSameInput: true)),
+      context);
   context.write(')');
   return context;
 }
 
-class CodegenVectorDrawableVisitor extends VectorDrawableVisitor<StringBuffer>
+class CodegenVectorDrawableVisitor
+    extends VectorDrawableIsoVisitor<StringBuffer>
     with CodegenResourceOrReferenceVisitorMixin {
   @override
   StringBuffer visitVectorDrawable(VectorDrawable node,
@@ -492,7 +501,7 @@ mixin CodegenResourceOrReferenceVisitorMixin
 }
 
 class CodegenAnimatedVectorDrawableVisitor
-    extends AnimatedVectorDrawableVisitor<StringBuffer>
+    extends AnimatedVectorDrawableIsoVisitor<StringBuffer>
     with CodegenResourceOrReferenceVisitorMixin {
   final CodegenVectorDrawableVisitor _vectorDrawableVisitor =
       CodegenVectorDrawableVisitor();

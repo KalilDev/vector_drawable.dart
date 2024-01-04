@@ -15,7 +15,10 @@ void serializeVectorDrawable(
 }
 
 void _serializeVector(XmlBuilder b, Vector node) {
-  b.element('vector', nest: () {
+  b.element('vector', namespaces: {
+    kAndroidXmlNamespace: 'android',
+    kAaptXmlNamespace: 'aapt',
+  }, nest: () {
     b.androidAttribute('name', node.name);
     b.androidAttribute('width', node.width);
     b.androidAttribute('height', node.height);
@@ -53,7 +56,7 @@ void _serializeClipPath(XmlBuilder b, ClipPath node) {
     b.styleOrAndroidAttribute<PathData>(
       'pathData',
       node.pathData,
-      stringify: (p) => throwUnimplemented(),
+      stringify: (p) => p.toPathDataString(needsSameInput: true),
     );
     for (final child in node.children) {
       _serializeVectorPart(b, child);
@@ -67,7 +70,7 @@ void _serializePath(XmlBuilder b, Path node) {
     b.styleOrAndroidAttribute<PathData>(
       'pathData',
       node.pathData,
-      stringify: (p) => throwUnimplemented(),
+      stringify: (p) => p.toPathDataString(needsSameInput: true),
     );
     b.styleOrAndroidAttribute(
       'fillColor',

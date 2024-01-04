@@ -1,6 +1,8 @@
 import 'dart:collection';
 import 'package:path_parsing/path_parsing.dart';
 
+import '../serializing/segments.dart';
+
 void _copySegmentInto(PathSegmentData source, PathSegmentData target) => target
   ..command = source.command
   ..targetPoint = source.targetPoint
@@ -32,55 +34,72 @@ void _emitSegmentWithoutMutation(
   normalizer.emitSegment(__mutableSegment, path);
 }
 
-// In Android VectorDrawables, it is common for vectors to end with an c instead
-// of an z, and in the android impl the path gets closed with an error, but with
-// the current path package the path is not parsed and an error is thrown. To
-// mitigate this, we must remove the trailing c
-String _removeTrailingCubic(String s) {
-  if (s.isEmpty) {
-    return s;
-  }
-  for (var i = s.length - 1; i >= 0; i--) {
-    if (s[i] == ' ') continue;
-    if (s[i] == 'c' || s[i] == 'C') {
-      return String.fromCharCodes(s.codeUnits.take(i));
-    }
-    return s;
-  }
-  // the string is just spaces
-  return s;
-}
-
-enum _PathDataInputType { string, segments, emitter }
+enum PathDataInputType { string, segments, emitter }
 
 abstract class PathEmitter {
   void emitTo(PathProxy proxy);
 }
 
+final Expando<UnmodifiableListView<PathSegmentData>> _pathDataSegmentsExpando =
+    Expando('PathData.segments');
+
+extension ExpandoPutIfAbsent<T extends Object> on Expando<T> {
+  T putIfAbsent(Object obj, T Function() ifAbsent) {
+    final res = this[obj];
+    if (res != null) {
+      return res;
+    }
+    return this[obj] = ifAbsent();
+  }
+}
+
 class PathData {
-  PathData.fromString(String asString)
-      : _stringInput = _removeTrailingCubic(asString),
+  const PathData.fromStringRaw(String asString)
+      : _stringInput = asString,
         _segmentsInput = null,
         _emitterInput = null,
-        _inputType = _PathDataInputType.string;
-  PathData.fromSegments(Iterable<PathSegmentData> segments)
+        _inputType = PathDataInputType.string;
+  factory PathData.fromString(String asString) =>
+      PathData.fromStringRaw(removeTrailingCubic(asString));
+  // In Android VectorDrawables, it is common for vectors to end with an c instead
+// of an z, and in the android impl the path gets closed with an error, but with
+// the current path package the path is not parsed and an error is thrown. To
+// mitigate this, we must remove the trailing c
+  static String removeTrailingCubic(String s) {
+    if (s.isEmpty) {
+      return s;
+    }
+    for (var i = s.length - 1; i >= 0; i--) {
+      if (s[i] == ' ') continue;
+      if (s[i] == 'c' || s[i] == 'C') {
+        return String.fromCharCodes(s.codeUnits.take(i));
+      }
+      return s;
+    }
+    // the string is just spaces
+    return s;
+  }
+
+  const PathData.fromSegmentsRaw(UnmodifiableListView<PathSegmentData> segments)
       : _stringInput = null,
-        _segmentsInput = UnmodifiableListView(segments.toList()),
+        _segmentsInput = segments,
         _emitterInput = null,
-        _inputType = _PathDataInputType.segments;
-  PathData.fromEmitter(PathEmitter emitter,
+        _inputType = PathDataInputType.segments;
+  factory PathData.fromSegments(Iterable<PathSegmentData> segments) =>
+      PathData.fromSegmentsRaw(UnmodifiableListView(segments.toList()));
+  const PathData.fromEmitter(PathEmitter emitter,
       {bool iKnowThatIWillGenerateBogusResultsIfITryToLerpThisPathDataWithAnyOtherPathDataOrReadItsSegments =
           false})
       : _stringInput = null,
         _segmentsInput = null,
         _emitterInput = emitter,
-        _inputType = _PathDataInputType.emitter,
+        _inputType = PathDataInputType.emitter,
         assert(
             iKnowThatIWillGenerateBogusResultsIfITryToLerpThisPathDataWithAnyOtherPathDataOrReadItsSegments);
   final String? _stringInput;
   final UnmodifiableListView<PathSegmentData>? _segmentsInput;
   final PathEmitter? _emitterInput;
-  final _PathDataInputType _inputType;
+  final PathDataInputType _inputType;
 
   static List<PathSegmentData> _parse(String asString) {
     final SvgPathStringSource parser = SvgPathStringSource(asString);
@@ -97,19 +116,22 @@ class PathData {
     return result;
   }
 
-  late final UnmodifiableListView<PathSegmentData> segments = () {
+  UnmodifiableListView<PathSegmentData> _buildSegments() {
     switch (_inputType) {
-      case _PathDataInputType.string:
+      case PathDataInputType.string:
         return UnmodifiableListView(_parse(_stringInput!));
-      case _PathDataInputType.segments:
+      case PathDataInputType.segments:
         return _segmentsInput!;
-      case _PathDataInputType.emitter:
+      case PathDataInputType.emitter:
         return UnmodifiableListView(const <PathSegmentData>[]);
     }
-  }();
+  }
+
+  UnmodifiableListView<PathSegmentData> get segments =>
+      _pathDataSegmentsExpando.putIfAbsent(this, _buildSegments);
 
   void emitTo(PathProxy proxy) {
-    if (_inputType == _PathDataInputType.emitter) {
+    if (_inputType == PathDataInputType.emitter) {
       _emitterInput!.emitTo(proxy);
       return;
     }
@@ -119,9 +141,34 @@ class PathData {
     }
   }
 
+  String toSimplifiedPathDataString() {
+    final stringProxy = _StringProxy();
+    emitTo(stringProxy);
+    final outBuffer = stringProxy.buffer;
+    return outBuffer.toString();
+  }
+
+  String toPathDataString({bool needsSameInput = false}) {
+    switch (_inputType) {
+      case PathDataInputType.string:
+        return _stringInput!;
+      case PathDataInputType.segments:
+        if (!needsSameInput) {
+          return toSimplifiedPathDataString();
+        } else {
+          return segmentsToPathString(segments);
+        }
+      case PathDataInputType.emitter:
+        assert(!needsSameInput);
+        return toSimplifiedPathDataString();
+    }
+  }
+
+  PathDataInputType get inputType => _inputType;
+
   static lerp(PathData a, PathData b, double t) {
-    if (a._inputType == _PathDataInputType.emitter ||
-        b._inputType == _PathDataInputType.emitter) {
+    if (a._inputType == PathDataInputType.emitter ||
+        b._inputType == PathDataInputType.emitter) {
       assert(false, "i told you not to use the emitter");
       print(
           "oh well, you are running an production build with broken paths. The offending paths are $a and $b");
@@ -132,5 +179,29 @@ class PathData {
       for (var i = 0; i < aSegments.length; i++)
         lerpPathSegment(aSegments[i], bSegments[i], t)
     ]);
+  }
+}
+
+class _StringProxy implements PathProxy {
+  final StringBuffer buffer = StringBuffer();
+  @override
+  void close() {
+    buffer.write('z');
+  }
+
+  @override
+  void cubicTo(
+      double x1, double y1, double x2, double y2, double x3, double y3) {
+    buffer.write('C$x1 $y1 $x2 $y2 $x3 $y3');
+  }
+
+  @override
+  void lineTo(double x, double y) {
+    buffer.write('L$x $y');
+  }
+
+  @override
+  void moveTo(double x, double y) {
+    buffer.write('M$x $y');
   }
 }

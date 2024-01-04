@@ -3,7 +3,7 @@ import 'util.dart';
 import 'package:xml/xml.dart';
 
 extension XmlStyleElementE on XmlElement {
-  StyleOr<T>? getStyleOrAttribute<T>(
+  StyleOr<T>? getStyleOrAttribute<T extends Object>(
     String name, {
     String? namespace,
     required T Function(String) parse,
@@ -14,7 +14,7 @@ extension XmlStyleElementE on XmlElement {
       )?.mapSelfTo(
         (attr) => StyleOr.parse(attr, parse),
       );
-  StyleOr<T>? getStyleOrAndroidAttribute<T>(
+  StyleOr<T>? getStyleOrAndroidAttribute<T extends Object>(
     String name, {
     required T Function(String) parse,
     T? defaultValue,
