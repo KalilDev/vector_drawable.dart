@@ -1,11 +1,9 @@
-import 'resource.dart';
-import 'style.dart';
+import 'package:vector_drawable_core/serializing.dart';
+import 'package:vector_drawable_core/model.dart';
 import '../model/animation.dart';
 import 'package:xml/xml.dart';
 
-import '../model/color.dart';
-import '../model/path.dart';
-import 'util.dart';
+import '../parsing/util.dart';
 
 void _serializeAnimationNode(XmlBuilder b, AnimationNode node) {
   if (node is AnimationSet) {

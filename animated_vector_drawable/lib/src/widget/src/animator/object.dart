@@ -1,9 +1,9 @@
+import 'package:animated_vector_drawable/src/widget/src/attributes.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:vector_drawable_core/vector_drawable_core.dart';
-import 'package:vector_drawable/src/widget/src/animator/animator.dart';
-import 'package:vector_drawable/src/widget/src/attributes.dart';
+import 'package:animated_vector_drawable_core/model.dart';
 import '../interpolation.dart';
+import 'animator.dart';
 
 class ObjectAnimator extends Animator with Diagnosticable {
   final ObjectAnimation animation;

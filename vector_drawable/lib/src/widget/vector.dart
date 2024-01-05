@@ -1,3 +1,4 @@
+import 'dart:developer';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -27,9 +28,19 @@ class VectorWidget extends StatelessWidget {
     Key? key,
     required this.vector,
     this.styleMapping = StyleMapping.empty,
+    this.cachingStrategy = cachingStrategyAll,
+    this.viewportClip = Clip.hardEdge,
   }) : super(key: key);
   final Vector vector;
   final StyleMapping styleMapping;
+  final Set<RenderVectorCache> cachingStrategy;
+  final Clip? viewportClip;
+  static const Set<RenderVectorCache> cachingStrategyAll = {
+    RenderVectorCache.clipPath,
+    RenderVectorCache.group,
+    RenderVectorCache.path,
+    RenderVectorCache.childOutlet,
+  };
 
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
@@ -38,8 +49,11 @@ class VectorWidget extends StatelessWidget {
         VectorProperty('vector', vector)));
     properties.add(DiagnosticsNodeVectorDiagnosticsNodeAdapter(VectorProperty(
         'styleMapping', styleMapping,
-        defaultValue: StyleMapping.empty)));
+        defaultValue: StyleMapping)));
   }
+
+  static const int _cachingStrategyAllBitset =
+      _PathFlag | _GroupFlag | _ClipPathFlag | _ChildOutletFlag;
 
   @override
   Widget build(BuildContext context) {
@@ -48,32 +62,11 @@ class VectorWidget extends StatelessWidget {
       styleMapping: styleMapping.mergeWith(
         ColorSchemeStyleMapping(Theme.of(context).colorScheme),
       ),
-      cachingStrategy: 7, // 0b111
+      cachingStrategy: identical(cachingStrategy, cachingStrategyAll)
+          ? _cachingStrategyAllBitset
+          : _flagsFromSet(cachingStrategy),
+      viewportClip: viewportClip,
     );
-  }
-}
-
-class _VectorColorAdapterStyleResolver implements StyleResolver {
-  final StyleResolver base;
-
-  _VectorColorAdapterStyleResolver(this.base);
-  @override
-  bool containsAny(covariant Iterable<StyleProperty> props) {
-    return base.containsAny(props);
-  }
-
-  @override
-  T? resolve<T>(StyleProperty property) {
-    if (T == VectorColor) {
-      try {
-        // First try to resolve as an flutter color
-        return base.resolve<Color>(property)?.asVectorColor as T?;
-      } on TypeError {
-        // Then try to resolve as an vector color
-        return base.resolve<T>(property);
-      }
-    }
-    return base.resolve(property);
   }
 }
 
@@ -82,12 +75,14 @@ class RawVectorWidget extends LeafRenderObjectWidget {
     Key? key,
     required this.vector,
     required this.styleMapping,
-    this.cachingStrategy = 0, // 0b000
+    this.cachingStrategy = 0, // 0b0000
+    required this.viewportClip,
   }) : super(key: key);
 
   final Vector vector;
   final StyleResolver styleMapping;
   final int cachingStrategy;
+  final Clip? viewportClip;
 
   @override
   RenderObject createRenderObject(BuildContext context) {
@@ -99,6 +94,7 @@ class RawVectorWidget extends LeafRenderObjectWidget {
       textDirection: Directionality.of(context),
       styleMapping: styleMapping,
       cachingStrategy: cachingStrategy,
+      viewportClip: viewportClip,
     );
   }
 
@@ -111,36 +107,16 @@ class RawVectorWidget extends LeafRenderObjectWidget {
       ..textScaleFactor = mediaQuery.textScaleFactor
       ..textDirection = Directionality.of(context)
       ..styleMapping = styleMapping
-      ..cachingStrategy = cachingStrategy;
+      ..cachingStrategy = cachingStrategy
+      .._viewportClip = viewportClip;
   }
 }
 
-class _MergedStyleMapping extends StyleMapping with Diagnosticable {
-  final StyleMapping a;
-  final StyleMapping b;
-
-  _MergedStyleMapping(this.a, this.b);
-
-  @override
-  bool contains(StyleProperty color) => a.contains(color) || b.contains(color);
-  @override
-  bool containsAny(Set<StyleProperty> colors) =>
-      a.containsAny(colors) || b.containsAny(colors);
-
-  @override
-  T? resolve<T>(StyleProperty color) => a.resolve(color) ?? b.resolve(color);
-
-  @override
-  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
-    super.debugFillProperties(properties);
-    a.debugFillProperties(properties);
-    b.debugFillProperties(properties);
-  }
-}
-
-class ColorSchemeStyleMapping extends StyleMapping with Diagnosticable {
+class ColorSchemeStyleMapping extends StyleResolverWithEfficientContains
+    with Diagnosticable {
   final ColorScheme scheme;
   ColorSchemeStyleMapping(this.scheme);
+
   static final _kColorSchemeColors = {
     const StyleProperty('android', 'colorBackground'),
     const StyleProperty('', 'colorSurface'),
@@ -165,96 +141,78 @@ class ColorSchemeStyleMapping extends StyleMapping with Diagnosticable {
 
   @override
   bool contains(StyleProperty color) => _kColorSchemeColors.contains(color);
+
   @override
-  bool containsAny(Set<StyleProperty> colors) =>
+  bool containsAny(Iterable<StyleProperty> colors) =>
       colors.any(_kColorSchemeColors.contains);
-
-  @override
-  T? resolve<T>(StyleProperty color) {
-    if (T != Color) {
-      return null;
-    }
-    Color? _resolveColor() {
-      if (color == const StyleProperty('android', 'colorBackground')) {
-        return scheme.background;
-      }
-      if (color.namespace != '') {
-        return null;
-      }
-      switch (color.name) {
-        case 'colorSurface':
-          return scheme.surface;
-        case 'colorOnSurface':
-          return scheme.onSurface;
-        case 'colorInverseSurface':
-          return scheme.inverseSurface;
-        case 'colorOnInverseSurface':
-          return scheme.onInverseSurface;
-        case 'colorInversePrimary':
-          return scheme.inversePrimary;
-        case 'colorSurfaceVariant':
-          return scheme.surfaceVariant;
-        case 'colorOnSurfaceVariant':
-          return scheme.onSurfaceVariant;
-        case 'colorOutline':
-          return scheme.outline;
-        case 'colorBackground':
-          return scheme.background;
-        case 'colorOnBackground':
-          return scheme.onBackground;
-        case 'colorPrimary':
-          return scheme.primary;
-        case 'colorOnPrimary':
-          return scheme.onPrimary;
-        case 'colorPrimaryContainer':
-          return scheme.primaryContainer;
-        case 'colorOnPrimaryContainer':
-          return scheme.onPrimaryContainer;
-        case 'colorSecondary':
-          return scheme.secondary;
-        case 'colorOnSecondary':
-          return scheme.onSecondary;
-        case 'colorSecondaryContainer':
-          return scheme.secondaryContainer;
-        case 'colorOnSecondaryContainer':
-          return scheme.onSecondaryContainer;
-        case 'colorTertiary':
-          return scheme.tertiary;
-        case 'colorOnTertiary':
-          return scheme.onTertiary;
-        case 'colorTertiaryContainer':
-          return scheme.tertiaryContainer;
-        case 'colorOnTertiaryContainer':
-          return scheme.onTertiaryContainer;
-        case 'colorError':
-          return scheme.error;
-        case 'colorOnError':
-          return scheme.onError;
-        default:
-          return null;
-      }
-    }
-
-    return _resolveColor() as T;
-  }
 
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
     properties.add(DiagnosticsProperty('scheme', scheme));
   }
-}
-
-class _EmptyStyleMapping extends StyleMapping with Diagnosticable {
-  const _EmptyStyleMapping();
-  @override
-  bool contains(StyleProperty color) => false;
 
   @override
-  bool containsAny(Set<StyleProperty> colors) => false;
-
-  @override
-  T? resolve<T>(StyleProperty color) => null;
+  Object? resolveUntyped(StyleProperty color) {
+    if (color == const StyleProperty('android', 'colorBackground')) {
+      return scheme.background;
+    }
+    if (color.namespace != '') {
+      return null;
+    }
+    switch (color.name) {
+      case 'colorSurface':
+        return scheme.surface;
+      case 'colorOnSurface':
+        return scheme.onSurface;
+      case 'colorInverseSurface':
+        return scheme.inverseSurface;
+      case 'colorOnInverseSurface':
+        return scheme.onInverseSurface;
+      case 'colorInversePrimary':
+        return scheme.inversePrimary;
+      case 'colorSurfaceVariant':
+        return scheme.surfaceVariant;
+      case 'colorOnSurfaceVariant':
+        return scheme.onSurfaceVariant;
+      case 'colorOutline':
+        return scheme.outline;
+      case 'colorBackground':
+        return scheme.background;
+      case 'colorOnBackground':
+        return scheme.onBackground;
+      case 'colorPrimary':
+        return scheme.primary;
+      case 'colorOnPrimary':
+        return scheme.onPrimary;
+      case 'colorPrimaryContainer':
+        return scheme.primaryContainer;
+      case 'colorOnPrimaryContainer':
+        return scheme.onPrimaryContainer;
+      case 'colorSecondary':
+        return scheme.secondary;
+      case 'colorOnSecondary':
+        return scheme.onSecondary;
+      case 'colorSecondaryContainer':
+        return scheme.secondaryContainer;
+      case 'colorOnSecondaryContainer':
+        return scheme.onSecondaryContainer;
+      case 'colorTertiary':
+        return scheme.tertiary;
+      case 'colorOnTertiary':
+        return scheme.onTertiary;
+      case 'colorTertiaryContainer':
+        return scheme.tertiaryContainer;
+      case 'colorOnTertiaryContainer':
+        return scheme.onTertiaryContainer;
+      case 'colorError':
+        return scheme.error;
+      case 'colorOnError':
+        return scheme.onError;
+      default:
+        return null;
+    }
+  }
 }
 
 class DiagnosticableMapEntry<K, V> with Diagnosticable {
@@ -269,43 +227,6 @@ class DiagnosticableMapEntry<K, V> with Diagnosticable {
     super.debugFillProperties(properties);
     properties.add(DiagnosticsProperty(keyName ?? 'key', _store.key));
     properties.add(DiagnosticsProperty(valueName ?? 'value', _store.value));
-  }
-}
-
-class _MapStyleMapping extends StyleMapping with DiagnosticableTreeMixin {
-  final Map<String, Object> map;
-  final String namespace;
-
-  _MapStyleMapping(
-    this.map, {
-    this.namespace = '',
-  });
-
-  @override
-  bool contains(StyleProperty color) =>
-      color.namespace == namespace && map.containsKey(color.name);
-
-  @override
-  bool containsAny(Set<StyleProperty> colors) => colors.any(contains);
-
-  @override
-  T? resolve<T>(StyleProperty prop) {
-    if (!contains(prop)) {
-      return null;
-    }
-    return map[prop.name] as T?;
-  }
-
-  @override
-  List<DiagnosticsNode> debugDescribeChildren() => map.entries
-      .map((e) => DiagnosticableMapEntry(e, 'name', 'styledProperty')
-          .toDiagnosticsNode())
-      .toList();
-
-  @override
-  void debugFillProperties(DiagnosticPropertiesBuilder properties) {
-    super.debugFillProperties(properties);
-    properties.add(DiagnosticsProperty('namespace', namespace));
   }
 }
 
@@ -416,17 +337,7 @@ class _GroupValues {
   }
 }
 
-abstract class StyleMapping implements StyleResolver, Diagnosticable {
-  const StyleMapping();
-  static const StyleMapping empty = _EmptyStyleMapping();
-  factory StyleMapping.fromMap(Map<String, Object> map, {String namespace}) =
-      _MapStyleMapping;
-
-  bool contains(StyleProperty prop);
-  bool containsAny(Set<StyleProperty> props);
-  StyleMapping mergeWith(StyleMapping other) =>
-      _MergedStyleMapping(this, other);
-}
+typedef StyleMapping = StyleResolverWithEfficientContains;
 
 class _ClipPathValues {
   final ui.Path pathData;
@@ -486,25 +397,32 @@ Set<RenderVectorCache> _setFromFlags(int flags) => {
       if (_cacheClipPath(flags)) RenderVectorCache.clipPath,
       if (_cacheGroup(flags)) RenderVectorCache.group,
       if (_cachePath(flags)) RenderVectorCache.path,
+      if (_cacheChildOutlet(flags)) RenderVectorCache.childOutlet,
     };
-const int _ClipPathFlag = 1;
-const int _GroupFlag = 2;
-const int _PathFlag = 4;
+const int _true = 1;
+const int _ClipPathFlag = _true >> 0;
+const int _GroupFlag = _true >> 1;
+const int _PathFlag = _true >> 2;
+const int _ChildOutletFlag = _true >> 2;
 bool _cacheClipPath(int cacheFlags) =>
     (cacheFlags & _ClipPathFlag) == _ClipPathFlag;
 bool _cacheGroup(int cacheFlags) => (cacheFlags & _GroupFlag) == _GroupFlag;
 bool _cachePath(int cacheFlags) => (cacheFlags & _PathFlag) == _PathFlag;
+bool _cacheChildOutlet(int cacheFlags) =>
+    (cacheFlags & _ChildOutletFlag) == _ChildOutletFlag;
 
 enum RenderVectorCache {
   clipPath,
   group,
   path,
+  childOutlet,
 }
 
 class RenderVector extends RenderBox {
   final Map<Group, _GroupValues> _groupCache = {};
   final Map<Path, _PathValues> _pathCache = {};
   final Map<ClipPath, _ClipPathValues> _clipPathCache = {};
+  //final Map<ChildOutlet, _ChildOutletValues> _childOutletValuesCache = {};
 
   RenderVector({
     required Vector vector,
@@ -513,12 +431,14 @@ class RenderVector extends RenderBox {
     required TextDirection textDirection,
     required StyleResolver styleMapping,
     required int cachingStrategy,
+    required Clip? viewportClip,
   })  : _vector = vector,
         _devicePixelRatio = devicePixelRatio,
         _textScaleFactor = textScaleFactor,
         _textDirection = textDirection,
-        _styleMapping = _VectorColorAdapterStyleResolver(styleMapping),
-        _cachingStrategy = cachingStrategy;
+        _styleMapping = styleMapping,
+        _cachingStrategy = cachingStrategy,
+        _viewportClip = viewportClip;
 
   Vector _vector;
   Vector get vector => _vector;
@@ -571,13 +491,9 @@ class RenderVector extends RenderBox {
     _textDirection = textDirection;
   }
 
-  _VectorColorAdapterStyleResolver _styleMapping;
+  StyleResolver _styleMapping;
   StyleResolver get styleMapping => _styleMapping;
   set styleMapping(StyleResolver styleMapping) {
-    if (_styleMapping.base == styleMapping) {
-      return;
-    }
-
     if (cachingStrategy != 0) {
       final currentContains = styleMapping.containsAny(vector.usedStyles);
       if (currentContains ||
@@ -600,7 +516,7 @@ class RenderVector extends RenderBox {
       }
       if (_cachePath(cachingStrategy)) {
         for (final p in _pathCache.keys.toList()) {
-          if (styleMapping.containsAny(p.usedStyles)) {
+          if (styleMapping.containsAny(p.localUsedStyles)) {
             _pathCache.remove(p);
           }
         }
@@ -608,7 +524,6 @@ class RenderVector extends RenderBox {
     } else {
       markNeedsPaint();
     }
-    _styleMapping = _VectorColorAdapterStyleResolver(styleMapping);
   }
 
   int _cachingStrategy;
@@ -629,6 +544,18 @@ class RenderVector extends RenderBox {
     }
   }
 
+  Clip? _viewportClip = null;
+  Clip? get viewportClip => _viewportClip;
+  set viewportClip(Clip? viewportClip) {
+    if (_viewportClip == viewportClip) {
+      return;
+    }
+    _viewportClip = viewportClip;
+    // TODO: Will not be needed always if the vector already specifies this and
+    //       we were null before
+    markNeedsPaint();
+  }
+
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
     super.debugFillProperties(properties);
@@ -638,6 +565,7 @@ class RenderVector extends RenderBox {
     properties.add(EnumProperty('textDirection', textDirection));
     properties.add(DiagnosticsProperty('styleMapping', styleMapping,
         defaultValue: StyleMapping.empty, style: DiagnosticsTreeStyle.sparse));
+    properties.add(DiagnosticsProperty('viewportClip', viewportClip));
   }
 
   Size _layoutUnconstrained() =>
@@ -724,7 +652,6 @@ class RenderVector extends RenderBox {
     canvas.restore();
   }
 
-  // TODO: trimPathStart, trimPathEnd, trimPathOffset, fillType
   static Paint _paintForPath(Path path, _PathValues values) {
     final paint = Paint()
       ..strokeWidth = values.strokeWidth
@@ -772,7 +699,8 @@ class RenderVector extends RenderBox {
   }
 
   void _paintPath(Canvas canvas, Path path) {
-    if (path.strokeColor == null && path.fillColor == null) {
+    if (path.strokeColor == const Value<VectorColor>(VectorColor.transparent) &&
+        path.fillColor == const Value<VectorColor>(VectorColor.transparent)) {
       return;
     }
     _PathValues values;
@@ -839,7 +767,7 @@ class RenderVector extends RenderBox {
     }
   }
 
-  void _paintWithOpacity(PaintingContext context, Offset offset) {
+  void _paintWithClippedViewport(PaintingContext context, Offset offset) {
     final transform = Matrix4.identity();
     var widthScale = size.width / vector.viewportWidth;
     if (textDirection == TextDirection.rtl && vector.autoMirrored) {
@@ -847,8 +775,9 @@ class RenderVector extends RenderBox {
     }
     var heightScale = size.height / vector.viewportHeight;
     transform.scale(widthScale, heightScale);
-    final vectorTint =
+    final vectorTintRaw =
         vector.tint.resolve(styleMapping) ?? VectorColor.transparent;
+    final vectorTint = vectorTintRaw.asColor;
     context.pushTransform(
       needsCompositing,
       offset,
@@ -861,7 +790,7 @@ class RenderVector extends RenderBox {
           canvas.saveLayer(
               null,
               Paint()
-                ..color = vectorTint.asColor
+                ..color = vectorTint
                 ..blendMode = vector.tintMode.asBlendMode);
         }
         _paintChildren(canvas, vector.children);
@@ -872,6 +801,33 @@ class RenderVector extends RenderBox {
         // canvas.translate
         canvas.restore();
       },
+    );
+  }
+
+  final LayerHandle<ClipRectLayer> _viewportClipLayer =
+      LayerHandle<ClipRectLayer>();
+
+  void _paintWithOpacity(PaintingContext context, Offset offset) {
+    final viewportClip = this.viewportClip;
+    if (viewportClip == null /* remove this */ || viewportClip == Clip.none) {
+      final removedLayer = _viewportClipLayer.layer;
+      _viewportClipLayer.layer = null;
+      removedLayer?.dispose();
+      _paintWithClippedViewport(context, offset);
+      return;
+    }
+    _viewportClipLayer.layer = context.pushClipRect(
+      needsCompositing,
+      offset,
+      Rect.fromLTWH(
+        0,
+        0,
+        size.width,
+        size.height,
+      ),
+      _paintWithClippedViewport,
+      clipBehavior: viewportClip,
+      oldLayer: _viewportClipLayer.layer,
     );
   }
 

@@ -1,5 +1,4 @@
-import 'util.dart';
-
+import 'package:animated_vector_drawable_core/serializing.dart';
 import '../model/animation.dart';
 import 'package:xml/xml.dart';
 

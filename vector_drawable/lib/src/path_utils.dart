@@ -63,8 +63,8 @@ class PathDataAdditionalData {
 const hellYeahBaby_ImDoingThisToReuseCodeWithoutHavingFlutterCodeOrDuplicationInMyGeneralPurposeVDLibrary =
     true;
 
-extension ExpandoPutIfAbsent<T extends Object> on Expando<T> {
-  T putIfAbsent(Object obj, T Function() ifAbsent) {
+extension _ExpandoPutIfAbsent<T extends Object> on Expando<T> {
+  T _putIfAbsent(Object obj, T Function() ifAbsent) {
     final res = this[obj];
     if (res != null) {
       return res;
@@ -75,7 +75,7 @@ extension ExpandoPutIfAbsent<T extends Object> on Expando<T> {
 
 PathDataAdditionalData getOrCreateAdditionalDataFromPathData(PathData path) =>
     PathDataAdditionalData._expando
-        .putIfAbsent(path, () => PathDataAdditionalData.createFromPath(path));
+        ._putIfAbsent(path, () => PathDataAdditionalData.createFromPath(path));
 
 class StandaloneCubic {
   final Offset p0;

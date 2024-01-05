@@ -1,10 +1,9 @@
+import 'package:animated_vector_drawable_core/model.dart';
 import 'package:xml/xml.dart';
 
 import '../parsing/animated_vector_drawable.dart';
 import '../serializing/animated_vector_drawable.dart';
 import 'animation.dart';
-import 'resource.dart';
-import 'vector_drawable.dart';
 
 //https://developer.android.com/reference/android/graphics/drawable/AnimatedVectorDrawable
 class AnimatedVectorDrawable extends Resource

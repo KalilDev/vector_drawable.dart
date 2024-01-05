@@ -1,12 +1,9 @@
-import 'resource.dart';
+import 'package:vector_drawable_core/model.dart';
+import 'package:vector_drawable_core/parsing.dart';
 import 'package:xml/xml.dart';
 
 import '../model/animated_vector_drawable.dart';
 import '../model/animation.dart';
-import '../model/resource.dart';
-import '../model/vector_drawable.dart';
-import 'exception.dart';
-import 'util.dart';
 
 AnimatedVector _parseAnimatedVector(XmlElement node) {
   if (node.name.qualified != 'animated-vector') {

@@ -1,10 +1,10 @@
-import 'resource.dart';
+import 'package:vector_drawable_core/model.dart';
+import 'package:vector_drawable_core/serializing.dart';
 import 'package:xml/xml.dart';
 
 import '../model/animated_vector_drawable.dart';
 import '../model/animation.dart';
-import '../model/vector_drawable.dart';
-import 'util.dart';
+import '../parsing/util.dart';
 
 void _serializeAnimatedVector(XmlBuilder b, AnimatedVector node) {
   b.element('animated-vector', nest: () {

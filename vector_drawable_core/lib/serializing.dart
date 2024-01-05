@@ -3,9 +3,6 @@
 /// More dartdocs go here.
 library vector_drawable_core.serializing;
 
-export 'src/serializing/animated_vector_drawable.dart';
-export 'src/serializing/animation.dart';
-export 'src/serializing/interpolator.dart';
 export 'src/serializing/resource.dart';
 export 'src/serializing/segments.dart';
 export 'src/serializing/style.dart';

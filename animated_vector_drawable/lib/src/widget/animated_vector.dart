@@ -1,14 +1,15 @@
 import 'dart:developer';
 
+import 'package:animated_vector_drawable/src/widget/src/attributes.dart';
+import 'package:animated_vector_drawable_core/model.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide Animation, ClipPath;
-import 'package:vector_drawable/src/widget/src/attributes.dart';
+import 'package:vector_drawable/vector_drawable.dart';
 import 'src/animator/animator.dart';
 import 'src/animator/object.dart';
 import 'src/animator/set.dart';
 import 'src/animator/targets.dart';
 import 'src/interpolation.dart';
-import 'vector.dart';
 import 'package:value_listenables/value_listenables.dart';
 import 'package:vector_drawable_core/vector_drawable_core.dart';
 
@@ -31,19 +32,6 @@ class AnimationStyleResolver extends StyleMapping with DiagnosticableTreeMixin {
   static const kNamespace = 'runtime-animation';
 
   @override
-  T? resolve<T>(StyleProperty property) {
-    if (property.namespace != kNamespace) {
-      return parentResolver.resolve(property);
-    }
-    final index = int.parse(property.name);
-    final prop = properties[index];
-    if (prop == null) {
-      return null;
-    }
-    return resolveStyledAs(prop, parentResolver) as T;
-  }
-
-  @override
   bool containsAny(Set<StyleProperty> props) =>
       props.any((e) => e.namespace == kNamespace) ||
       parentResolver.containsAny(props);
@@ -60,6 +48,22 @@ class AnimationStyleResolver extends StyleMapping with DiagnosticableTreeMixin {
     super.debugFillProperties(properties);
     properties.add(DiagnosticsProperty('parentResolver', parentResolver));
   }
+
+  @override
+  Object? resolveUntyped(StyleProperty property) {
+    if (property.namespace != kNamespace) {
+      return parentResolver.resolve(property);
+    }
+    final index = int.parse(property.name);
+    final prop = properties[index];
+    if (prop == null) {
+      return null;
+    }
+    return resolveStyledAs(prop, parentResolver);
+  }
+
+  @override
+  T? resolve<T>(StyleProperty property) => resolveUntyped(property) as T?;
 }
 
 class AnimatedVectorWidget extends StatefulWidget {
@@ -291,7 +295,7 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
         .map((e) =>
             e is StyleResolvable<Object> ? e : SingleStyleResolvable(e)));
 
-    StyleOr<T> prop<T>(StyleOr<T> otherwise, String name) {
+    StyleOr<T> prop<T extends Object>(StyleOr<T> otherwise, String name) {
       final i = animatableProperties.indexOf(name);
       if (i == -1) {
         return otherwise;
@@ -418,7 +422,8 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
   @override
   Widget build(BuildContext context) {
     final styleMapping = widget.styleMapping
-        .mergeWith(ColorSchemeStyleMapping(Theme.of(context).colorScheme));
+            .mergeWith(ColorSchemeStyleMapping(Theme.of(context).colorScheme))
+        as StyleMapping;
     return AnimatedBuilder(
       animation: animatedRoot.values,
       builder: (context, _) {

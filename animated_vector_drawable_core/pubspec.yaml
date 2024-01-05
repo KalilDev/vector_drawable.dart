@@ -1,0 +1,17 @@
+name: animated_vector_drawable_core
+description: An library for working with animated vector drawables
+version: 0.0.1-testing.1
+homepage: https://www.github.com/KalilDev/vector_drawable.dart
+
+environment:
+  sdk: '>=2.18.2 <3.0.0'
+
+dependencies:
+  vector_math: ^2.0.0
+  xml: ^5.3.1
+  vector_drawable_core:
+    path: ../vector_drawable_core
+
+dev_dependencies:
+  lints: ^2.0.0
+#  test: ^1.16.0

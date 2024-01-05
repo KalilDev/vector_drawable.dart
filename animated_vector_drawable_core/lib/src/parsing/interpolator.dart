@@ -1,11 +1,9 @@
+import 'package:vector_drawable_core/model.dart';
+import 'package:vector_drawable_core/parsing.dart';
 import 'package:vector_drawable_core/src/parsing/util.dart';
 
 import '../model/animation.dart';
 import 'package:xml/xml.dart';
-
-import '../model/path.dart';
-import '../model/resource.dart';
-import 'exception.dart';
 
 LinearInterpolator _parseLinearInterpolator(
     XmlElement node, ResourceReference? source) {

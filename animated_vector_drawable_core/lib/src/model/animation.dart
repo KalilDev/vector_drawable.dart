@@ -1,8 +1,8 @@
 import 'package:path_parsing/path_parsing.dart';
 // ignore: implementation_imports
 import 'package:path_parsing/src/path_segment_type.dart';
-import 'diagnostics.dart';
-import '../path_evaluator.dart';
+import 'package:vector_drawable_core/model.dart';
+import 'package:vector_drawable_core/path_evaluator.dart';
 import 'package:vector_math/vector_math_64.dart';
 import 'package:xml/xml.dart';
 
@@ -10,9 +10,6 @@ import '../parsing/animation.dart';
 import '../parsing/interpolator.dart';
 import '../serializing/animation.dart';
 import '../serializing/interpolator.dart';
-import 'path.dart';
-import 'resource.dart';
-import 'style.dart';
 
 //https://developer.android.com/guide/topics/resources/animation-resource
 class AnimationResource extends Resource

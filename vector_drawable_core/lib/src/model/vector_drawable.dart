@@ -81,6 +81,9 @@ class VectorDrawable extends Resource {
 final Expando<Set<StyleProperty>> _usedStylesExpando =
     Expando('VectorDrawableNode.usedStyles');
 
+final Expando<List<StyleProperty>> _localUsedStylesExpando =
+    Expando('VectorDrawableNode.localUsedStyles');
+
 final Expando<List<ValueOrProperty<Object>>> _localValuesOrPropertiesExpando =
     Expando('VectorDrawableNode.localValuesOrProperties');
 
@@ -91,12 +94,15 @@ abstract class VectorDrawableNode implements VectorDiagnosticable {
     this.name,
   });
   Iterable<StyleProperty> get _usedStyles;
+  Iterable<StyleProperty> get _localUsedStyles;
   List<ValueOrProperty<Object>> get _localValuesOrProperties;
   List<ValueOrProperty<Object>> get localValuesOrProperties =>
       _localValuesOrPropertiesExpando.putIfAbsent(
           this, () => UnmodifiableListView(_localValuesOrProperties));
   Set<StyleProperty> get usedStyles =>
       _usedStylesExpando.putIfAbsent(this, _usedStyles.toSet);
+  List<StyleProperty> get localUsedStyles =>
+      _localUsedStylesExpando.putIfAbsent(this, _localUsedStyles.toList);
   R accept<R, Context>(VectorDrawableNodeRawVisitor<R, Context> visitor,
       [Context? context]);
 }

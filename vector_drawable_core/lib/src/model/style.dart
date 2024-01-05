@@ -5,7 +5,7 @@ const _iAmExtendingYou = Object();
 abstract class StyleResolver {
   final Object _dontImplementMe;
   const StyleResolver() : _dontImplementMe = _iAmExtendingYou;
-  const factory StyleResolver.empty() = _EmptyStyleResolver;
+  static const StyleResolverWithEfficientContains empty = _EmptyStyleResolver();
   const factory StyleResolver.merged(
     StyleResolver first,
     StyleResolver second,
@@ -37,6 +37,7 @@ abstract class StyleResolverWithEfficientContains extends StyleResolver
   const factory StyleResolverWithEfficientContains.fromMap(
       Map<String, Object> values,
       {String namespace}) = _StyleResolverFromMap;
+  static const StyleResolverWithEfficientContains empty = _EmptyStyleResolver();
   @override
   StyleResolver mergeWith(StyleResolver other) =>
       other is StyleResolverWithEfficientContains
@@ -58,7 +59,7 @@ class _StyleResolverFromMap extends StyleResolverWithEfficientContains {
       color.namespace == namespace && map.containsKey(color.name);
 
   @override
-  bool containsAny(Set<StyleProperty> colors) => colors.any(contains);
+  bool containsAny(Iterable<StyleProperty> colors) => colors.any(contains);
 
   @override
   Object? resolveUntyped(StyleProperty prop) {
@@ -69,14 +70,19 @@ class _StyleResolverFromMap extends StyleResolverWithEfficientContains {
   }
 }
 
-class _EmptyStyleResolver extends StyleResolver {
+class _EmptyStyleResolver extends StyleResolverWithEfficientContains {
   const _EmptyStyleResolver() : super();
 
+  @override
+  bool contains(StyleProperty prop) => false;
   @override
   bool containsAny(Iterable<StyleProperty> props) => false;
 
   @override
   Object? resolveUntyped(StyleProperty property) => null;
+
+  @override
+  T? resolve<T>(StyleProperty property) => null;
 }
 
 class _MergedStyleResolver extends StyleResolver {

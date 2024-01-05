@@ -1,9 +1,9 @@
 import 'dart:ui';
 
+import 'package:animated_vector_drawable_core/model.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide Animation, ClipPath;
 import 'package:vector_drawable/src/path_utils.dart';
-import 'package:vector_drawable_core/vector_drawable_core.dart';
 
 class CurveInterpolator extends Interpolator {
   final Curve curve;

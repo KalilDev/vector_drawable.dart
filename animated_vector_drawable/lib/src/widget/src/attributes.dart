@@ -1,4 +1,4 @@
-import 'package:vector_drawable_core/vector_drawable_core.dart';
+import 'package:vector_drawable_core/model.dart';
 
 extension VectorAttributeE on Vector {
   Object? getThemeableAttribute(String name) {

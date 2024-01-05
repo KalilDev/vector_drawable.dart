@@ -1,11 +1,8 @@
-import 'resource.dart';
-import 'style.dart';
+import 'package:vector_drawable_core/model.dart';
+import 'package:vector_drawable_core/parsing.dart';
+
 import '../model/animation.dart';
 import 'package:xml/xml.dart';
-
-import '../model/path.dart';
-import '../model/resource.dart';
-import 'exception.dart';
 import 'util.dart';
 
 AnimationNode _parseAnimationNode(XmlElement node) {

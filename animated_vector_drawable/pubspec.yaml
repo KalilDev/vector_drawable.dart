@@ -1,5 +1,5 @@
-name: vector_drawable
-description: A vector drawable package for flutter
+name: animated_vector_drawable
+description: A animated vector drawable package for flutter
 version: 0.1.0-testing.1
 homepage: https://github.com/kalildev/vector_drawable.dart 
 
@@ -14,8 +14,10 @@ dependencies:
   vector_math: ^2.0.0
   xml: ^5.3.1
   path_parsing: ^1.0.0
-  vector_drawable_core:
-    path: ../vector_drawable_core
+  vector_drawable:
+    path: ../vector_drawable
+  animated_vector_drawable_core:
+    path: ../animated_vector_drawable_core
 
 dev_dependencies:
   flutter_test:
