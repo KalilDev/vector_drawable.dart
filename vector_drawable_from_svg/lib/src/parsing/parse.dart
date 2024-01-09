@@ -1,7 +1,10 @@
+import 'dart:math';
+
 import 'package:vector_drawable_core/model.dart';
 import 'package:vector_drawable_core/parsing.dart';
 import 'package:vector_drawable_from_svg/src/model/svg_vector_drawable.dart';
 import 'package:vector_drawable_from_svg/src/parsing/utils.dart';
+import 'package:vector_math/vector_math.dart';
 import 'package:xml/xml.dart';
 
 int _generationIndex = 0;
@@ -27,6 +30,41 @@ Map<String, String> extractStylesAndMergeWithParent(
   return mergeStylesWithParent(stylesFromStyleString(style), parentStyles);
 }
 
+SvgChildOutlet _parseSvgRect(XmlElement element, ParentData parentData) {
+  final idAndLabel = idAndLabelForElement(element, generatedPrefix: 'Group');
+  if (idAndLabel.id != 'ChildOutlet') {
+    throw UnimplementedError('Only rect outlets are supported');
+  }
+
+  const kX = 'x';
+  const kY = 'y';
+  const kWidth = 'width';
+  const kHeight = 'height';
+  final x = element.getAttribute(kX)?.mapSelfTo(double.parse) ?? 0.0;
+  final y = element.getAttribute(kY)?.mapSelfTo(double.parse) ?? 0.0;
+  final tl = Vector2(x, y);
+  parentData.transformPoint(tl);
+  final width = element.getAttribute(kWidth)!.mapSelfTo(double.parse);
+  final height = element.getAttribute(kHeight)!.mapSelfTo(double.parse);
+  final br = Vector2(x + width, y + height);
+  parentData.transformPoint(br);
+
+  final l = min(tl.x, br.x);
+  final t = min(tl.y, br.y);
+  final r = max(tl.x, br.x);
+  final b = max(tl.y, br.y);
+  return SvgChildOutlet(
+    idAndLabel,
+    ChildOutlet(
+      name: idAndLabel.id,
+      x: Value(l),
+      y: Value(t),
+      width: Value(r - l),
+      height: Value(b - t),
+    ),
+  );
+}
+
 SvgGroup _parseSvgGroup(XmlElement element, ParentData parentData) {
   const kTransform = 'transform';
   final idAndLabel = idAndLabelForElement(element, generatedPrefix: 'Group');
@@ -38,7 +76,7 @@ SvgGroup _parseSvgGroup(XmlElement element, ParentData parentData) {
     idAndLabel: idAndLabel,
     children: element.childElements
         .whereIsSupportedSvgElement()
-        .map((el) => _parseSvgPathOrGroup(el, localParentData))
+        .map((el) => _parseSvgPathOrGroupOrRect(el, localParentData))
         .toList(),
   );
 }
@@ -59,12 +97,14 @@ SvgPath _parseSvgPath(XmlElement element, ParentData parentData) {
   );
 }
 
-SvgPathOrGroup _parseSvgPathOrGroup(XmlElement element, ParentData parentData) {
+SvgPart _parseSvgPathOrGroupOrRect(XmlElement element, ParentData parentData) {
   switch (element.name.qualified) {
     case 'g':
       return _parseSvgGroup(element, parentData);
     case 'path':
       return _parseSvgPath(element, parentData);
+    case 'rect':
+      return _parseSvgRect(element, parentData);
     default:
       print(element.name.qualified);
       throw UnimplementedError();
@@ -101,8 +141,10 @@ SvgVectorDrawable parseSvgIntoVectorDrawable(
 
   final children = doc.childElements
       .whereIsSupportedSvgElement()
-      .map((el) => _parseSvgPathOrGroup(el, rootParentData))
+      .map((el) => _parseSvgPathOrGroupOrRect(el, rootParentData))
       .toList();
+
+  print(children);
 
   final svgVector = svgVectorFromVectorDimensionsAndStyleAndChildren(
     vectorDimensionsAndStyle,

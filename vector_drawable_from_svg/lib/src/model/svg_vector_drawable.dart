@@ -7,12 +7,14 @@ abstract class SvgNode {
   VectorDrawableNode get node;
 }
 
-abstract class SvgPathOrGroup extends SvgNode {
+abstract class SvgPart extends SvgNode {
   IdAndLabel get idAndLabel;
   VectorPart get part;
-  VectorDrawableNode get node => part;
   String get id => idAndLabel.id;
+  VectorDrawableNode get node => part;
 }
+
+abstract class SvgPathOrGroup extends SvgPart {}
 
 class SvgPath extends SvgPathOrGroup {
   final IdAndLabel idAndLabel;
@@ -31,6 +33,16 @@ class SvgGroup extends SvgPathOrGroup {
   SvgGroup(this.idAndLabel, this.labels, this.group);
   @override
   VectorPart get part => group;
+}
+
+class SvgChildOutlet extends SvgPart {
+  final IdAndLabel idAndLabel;
+  final ChildOutlet childOutlet;
+
+  SvgChildOutlet(this.idAndLabel, this.childOutlet);
+
+  @override
+  VectorPart get part => childOutlet;
 }
 
 typedef Id = String;

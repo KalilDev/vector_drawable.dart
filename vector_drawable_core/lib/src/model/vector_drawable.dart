@@ -339,6 +339,67 @@ enum StrokeLineJoin {
   bevel,
 }
 
+class ChildOutlet extends VectorPart with VectorDiagnosticableMixin {
+  final StyleOr<double> x;
+  final StyleOr<double> y;
+  final StyleOr<double> width;
+  final StyleOr<double> height;
+
+  const ChildOutlet({
+    String? name,
+    required this.x,
+    required this.y,
+    required this.width,
+    required this.height,
+  }) : super(name: name);
+
+  @override
+  List<VectorProperty<void>> properties() => [
+        VectorNullableProperty<String>('name', name),
+        VectorStyleableProperty<double>.withDefault('x', width,
+            defaultValue: 0.0),
+        VectorStyleableProperty<double>.withDefault('y', height,
+            defaultValue: 0.0),
+        VectorStyleableProperty<double>('width', width),
+        VectorStyleableProperty<double>('height', height),
+      ];
+
+  @override
+  Iterable<StyleProperty> get _localUsedStyles => _usedStyles;
+
+  @override
+  Iterable<StyleProperty> get _usedStyles => [
+        if (x.styled != null) x.styled!,
+        if (y.styled != null) y.styled!,
+        if (width.styled != null) width.styled!,
+        if (height.styled != null) height.styled!,
+      ];
+
+  @override
+  List<ValueOrProperty<Object>> get _localValuesOrProperties => [
+        x,
+        y,
+        width,
+        height,
+      ];
+
+  static const List<String> stylablePropertyNames = [
+    'x',
+    'y',
+    'width',
+    'height',
+  ];
+
+  @override
+  VectorDiagnosticsNode toDiagnosticsNode([String? name]) =>
+      super.toDiagnosticsNode(this.name);
+
+  @override
+  R accept<R, Context>(VectorDrawablePartRawVisitor<R, Context> visitor,
+          [Context? context]) =>
+      visitor.visitChildOutlet(this, context);
+}
+
 class Path extends VectorPart with VectorDiagnosticableMixin {
   final StyleOr<PathData> pathData;
   final StyleOr<VectorColor> fillColor;

@@ -107,7 +107,7 @@ Path? _parsePath(XmlElement node) {
     strokeWidth: node.getStyleOrAndroidAttribute(
       'strokeWidth',
       parse: double.parse,
-      defaultValue: 0,
+      defaultValue: 0.0,
     )!,
     strokeAlpha: node.getStyleOrAndroidAttribute(
       'strokeAlpha',

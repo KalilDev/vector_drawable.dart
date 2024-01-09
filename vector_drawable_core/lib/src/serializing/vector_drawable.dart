@@ -64,6 +64,15 @@ void _serializeClipPath(XmlBuilder b, ClipPath node) {
   });
 }
 
+void _serializeChildOutlet(XmlBuilder b, ChildOutlet node) {
+  b.element('child-outlet', nest: () {
+    b.styleOrAndroidAttribute<double>('x', node.x);
+    b.styleOrAndroidAttribute<double>('y', node.y);
+    b.styleOrAndroidAttribute<double>('width', node.x);
+    b.styleOrAndroidAttribute<double>('height', node.y);
+  });
+}
+
 void _serializePath(XmlBuilder b, Path node) {
   b.element('path', nest: () {
     b.androidAttribute('name', node.name);
@@ -104,6 +113,8 @@ void _serializeVectorPart(XmlBuilder b, VectorPart node) {
     _serializePath(b, node);
   } else if (node is ClipPath) {
     _serializeClipPath(b, node);
+  } else if (node is ChildOutlet) {
+    _serializeChildOutlet(b, node);
   } else {
     throw TypeError();
   }

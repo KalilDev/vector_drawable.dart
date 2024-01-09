@@ -11,7 +11,7 @@ const outputFilename = 'vd.xml';
 const outputCodeFilename = 'code.dart';
 const codeFileHeader = '''library generated;
 import 'package:vector_drawable_core/vector_drawable_core.dart';
-
+import 'package:vector_drawable_from_svg/src/visitors/extract_used_styles_visitor.dart';
 
 class ExtractedResolver extends StyleResolverWithEfficientContains {
   final StyleResolverWithEfficientContains _values;
@@ -144,13 +144,14 @@ class _ResolverOverride extends StyleResolverWithEfficientContains
   }
 }
 
-final drawable = ''';
+const Vector drawable = ''';
 Future<int> main() async {
   final file = File(filename);
   final fileString = await file.readAsString();
   final fileXml = XmlDocument.parse(fileString);
   final source = ResourceReference('pitu', 'pitusvg');
   final fileSvgVector = SvgVectorDrawable.parseDocument(fileXml, source);
+  print(fileSvgVector.vectorDrawable.body.children);
   {
     final outString =
         VectorDrawable.serializeDocument(fileSvgVector.vectorDrawable)
@@ -168,7 +169,7 @@ Future<int> main() async {
             fileSvgVector.vectorDrawable.source)
         : fileSvgVector.vectorDrawable;
     final outBuffer = StringBuffer(codeFileHeader);
-    CodegenVectorDrawableVisitor().visitVectorDrawable(vector, outBuffer);
+    CodegenVectorDrawableVisitor().visitVector(vector.body, outBuffer);
     outBuffer.writeln(';');
     String serializeValue(ValueOrProperty value) => value is! Value<PathData>
         ? value.toString()

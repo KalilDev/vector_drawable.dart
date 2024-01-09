@@ -50,6 +50,7 @@ abstract class _VectorDrawablePartVisitorBase<R, Context> {
   R visitGroup(Group node, [Context? context]);
   R visitPath(Path node, [Context? context]);
   R visitClipPath(ClipPath node, [Context? context]);
+  R visitChildOutlet(ChildOutlet node, [Context? context]);
 }
 
 @Deprecated(

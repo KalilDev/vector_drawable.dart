@@ -296,9 +296,23 @@ class CodegenVectorDrawableVisitor
       visitPath(node, context);
     } else if (node is ClipPath) {
       visitClipPath(node, context);
+    } else if (node is ChildOutlet) {
+      visitChildOutlet(node, context);
     } else {
       throwUnimplemented();
     }
+    return context;
+  }
+
+  @override
+  StringBuffer visitChildOutlet(ChildOutlet node, [StringBuffer? context]) {
+    context ??= StringBuffer();
+    context.write('ChildOutlet(');
+    _maybeWriteStyleNamed('x', context, node.x, 0.0, _visitStringify);
+    _maybeWriteStyleNamed('y', context, node.y, 0.0, _visitStringify);
+    _writeStyleNamed('width', context, node.width, _visitStringify);
+    _writeStyleNamed('height', context, node.height, _visitStringify);
+    context.write(')');
     return context;
   }
 }

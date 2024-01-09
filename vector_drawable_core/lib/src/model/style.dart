@@ -55,11 +55,13 @@ class _StyleResolverFromMap extends StyleResolverWithEfficientContains {
   });
 
   @override
-  bool contains(StyleProperty color) =>
-      color.namespace == namespace && map.containsKey(color.name);
+  bool contains(StyleProperty prop) =>
+      prop.namespace == namespace && map.containsKey(prop.name);
 
   @override
-  bool containsAny(Iterable<StyleProperty> colors) => colors.any(contains);
+  bool containsAny(Iterable<StyleProperty> colors) {
+    return colors.any(contains);
+  }
 
   @override
   Object? resolveUntyped(StyleProperty prop) {

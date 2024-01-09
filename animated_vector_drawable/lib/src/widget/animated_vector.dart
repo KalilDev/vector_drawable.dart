@@ -73,11 +73,13 @@ class AnimatedVectorWidget extends StatefulWidget {
     this.styleMapping = StyleMapping.empty,
     this.onStatusChange,
     this.controller,
+    this.viewportClip,
   }) : super(key: key);
   final AnimatedVector animatedVector;
   final StyleMapping styleMapping;
   final ValueChanged<AnimatorStatus>? onStatusChange;
   final AnimatorController? controller;
+  final Clip? viewportClip;
 
   @override
   void debugFillProperties(DiagnosticPropertiesBuilder properties) {
@@ -409,9 +411,10 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
   }
 
   Widget _buildVectorWidget(BuildContext context, StyleResolver resolver) {
-    return RawVectorWidget(
+    return RawLeafVectorWidget(
       vector: animatable,
-      styleMapping: resolver,
+      styleResolver: resolver,
+      viewportClip: widget.viewportClip,
       cachingStrategy: (animatedRoot.status.value == AnimatorStatus.forward ||
               animatedRoot.status.value == AnimatorStatus.reverse)
           ? 0
@@ -422,7 +425,7 @@ class AnimatedVectorState extends State<AnimatedVectorWidget>
   @override
   Widget build(BuildContext context) {
     final styleMapping = widget.styleMapping
-            .mergeWith(ColorSchemeStyleMapping(Theme.of(context).colorScheme))
+            .mergeWith(ColorSchemeStyleResolver(Theme.of(context).colorScheme))
         as StyleMapping;
     return AnimatedBuilder(
       animation: animatedRoot.values,

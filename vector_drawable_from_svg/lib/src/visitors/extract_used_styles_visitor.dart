@@ -1,7 +1,7 @@
 import 'package:vector_drawable_core/vector_drawable_core.dart';
 import 'package:vector_drawable_core/vector_drawable_core.dart';
 
-enum ElementType { Vector, Group, ClipPath, Path }
+enum ElementType { Vector, Group, ClipPath, Path, ChildOutlet }
 
 class ElementNameTypeAndPropertyName {
   final String name;
@@ -26,6 +26,9 @@ class ElementNameTypeAndPropertyName {
         break;
       case 'Path':
         type = ElementType.Path;
+        break;
+      case 'ChildOutlet':
+        type = ElementType.ChildOutlet;
         break;
       default:
         throw ArgumentError();
@@ -129,6 +132,8 @@ class ExtractUsedStylesVisitor
     );
     namedArguments.addAll({
       #name: node.name,
+      #strokeLineCap: node.strokeLineCap,
+      #strokeLineJoin: node.strokeLineJoin,
       #strokeMiterLimit: node.strokeMiterLimit,
       #fillType: node.fillType
     });
@@ -199,6 +204,24 @@ class ExtractUsedStylesVisitor
       #children: children,
     });
     return Function.apply(Vector.new, const [], namedArguments) as Vector;
+  }
+
+  @override
+  VectorDrawableNode visitChildOutlet(ChildOutlet node,
+      [Map<ElementNameTypeAndPropertyName, ValueOrProperty<Object>>? context]) {
+    context ??= _makeContext();
+    final namedArguments = _addToContextAndExtractParams(
+      node.name ?? 'ROOT',
+      node.localValuesOrProperties,
+      ElementType.ChildOutlet,
+      ChildOutlet.stylablePropertyNames,
+      context,
+    );
+    namedArguments.addAll({
+      #name: node.name ?? 'ChildOutlet',
+    });
+    return Function.apply(ChildOutlet.new, const [], namedArguments)
+        as ChildOutlet;
   }
 
   @override
