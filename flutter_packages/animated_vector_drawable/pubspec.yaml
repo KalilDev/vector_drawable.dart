@@ -17,7 +17,7 @@ dependencies:
   vector_drawable:
     path: ../vector_drawable
   animated_vector_drawable_core:
-    path: ../animated_vector_drawable_core
+    path: ../../packages/animated_vector_drawable_core
 
 dev_dependencies:
   flutter_test:
