@@ -92,12 +92,25 @@ mixin RenderVectorBaseMixin on RenderBox {
     Offset offset,
     Group group,
   );
+  void paintAffineGroup(
+    PaintingContext context,
+    Offset offset,
+    AffineGroup affineGroup,
+  );
 
   void paintChildren(
     PaintingContext context,
     Offset offset,
     List<VectorPart> children,
   );
+
+  void paintInsideGroup(PaintingContext context, Offset offset, Group group);
+
+  void paintInsideAffineGroup(
+      PaintingContext context, Offset offset, AffineGroup affineGroup);
+
+  void paintInsideClipPath(
+      PaintingContext context, Offset offset, ClipPath clipPath);
 
   Size _layoutUnconstrained() =>
       Size(_convertDimension(vector.width), _convertDimension(vector.height));
@@ -138,6 +151,11 @@ mixin RenderVectorBaseMixin on RenderBox {
   void defaultPaintInsideGroup(
       PaintingContext context, Offset offset, Group group) {
     paintChildren(context, offset, group.children);
+  }
+
+  void defaultPaintInsideAffineGroup(
+      PaintingContext context, Offset offset, AffineGroup affineGroup) {
+    paintChildren(context, offset, affineGroup.children);
   }
 
   void defaultPaintInsideClipPath(
@@ -190,6 +208,7 @@ mixin RenderVectorBaseMixin on RenderBox {
 
     if (values.strokeColor == Colors.transparent &&
         values.fillColor == Colors.transparent) {
+      canvas.restore();
       return;
     }
     final paint = _paintForPath(path, values);
@@ -213,6 +232,8 @@ mixin RenderVectorBaseMixin on RenderBox {
       PaintingContext context, Offset offset, VectorPart part) {
     if (part is Group) {
       paintGroup(context, offset, part);
+    } else if (part is AffineGroup) {
+      paintAffineGroup(context, offset, part);
     } else if (part is Path) {
       paintPath(context, offset, part);
     } else if (part is ClipPath) {

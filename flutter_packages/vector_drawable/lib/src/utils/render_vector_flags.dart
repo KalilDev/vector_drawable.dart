@@ -15,6 +15,9 @@ int flagsFromSet(Set<RenderVectorCache> parts) {
   if (parts.contains(RenderVectorCache.vector)) {
     result |= VectorFlag;
   }
+  if (parts.contains(RenderVectorCache.affineGroup)) {
+    result |= AffineGroupFlag;
+  }
   return result;
 }
 
@@ -24,6 +27,7 @@ Set<RenderVectorCache> setFromFlags(int flags) => {
       if (cachePath(flags)) RenderVectorCache.path,
       if (cacheChildOutlet(flags)) RenderVectorCache.childOutlet,
       if (cacheVector(flags)) RenderVectorCache.vector,
+      if (cacheAffineGroup(flags)) RenderVectorCache.affineGroup,
     };
 const int _false = 0;
 const int _true = 1;
@@ -32,6 +36,7 @@ const int GroupFlag = _true << 1;
 const int PathFlag = _true << 2;
 const int ChildOutletFlag = _true << 3;
 const int VectorFlag = _true << 4;
+const int AffineGroupFlag = _true << 5;
 bool cacheClipPath(int cacheFlags) =>
     (cacheFlags & ClipPathFlag) == ClipPathFlag;
 bool cacheGroup(int cacheFlags) => (cacheFlags & GroupFlag) == GroupFlag;
@@ -39,6 +44,7 @@ bool cachePath(int cacheFlags) => (cacheFlags & PathFlag) == PathFlag;
 bool cacheChildOutlet(int cacheFlags) =>
     (cacheFlags & ChildOutletFlag) == ChildOutletFlag;
 bool cacheVector(int cacheFlags) => (cacheFlags & VectorFlag) == VectorFlag;
+bool cacheAffineGroup(int cacheFlags) => (cacheFlags & AffineGroupFlag) == AffineGroupFlag;
 
 enum RenderVectorCache {
   clipPath,
@@ -46,4 +52,5 @@ enum RenderVectorCache {
   path,
   childOutlet,
   vector,
+  affineGroup,
 }

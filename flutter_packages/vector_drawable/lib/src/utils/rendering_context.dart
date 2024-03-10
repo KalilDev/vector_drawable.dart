@@ -3,9 +3,11 @@ import 'dart:ui' as ui;
 
 import 'dart:collection';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide ClipPath;
 import 'package:path_parsing/path_parsing.dart';
 import 'package:vector_drawable/src/path_utils.dart';
+import 'package:vector_drawable/src/widget/vector.dart' show VectorWidget;
 import 'package:vector_drawable_core/model.dart';
 import 'package:vector_math/vector_math_64.dart' hide Vector;
 
@@ -28,9 +30,30 @@ class VectorRenderingContext {
         _textDirection = textDirection,
         _styleResolver = styleResolver,
         _cachingStrategy = cachingStrategy,
-        _viewportClip = viewportClip;
+        _viewportClip = viewportClip {
+    _debugVerifyHasAllStyles();
+  }
+
+  void _debugVerifyHasAllStyles() {
+    if (!kDebugMode) {
+      return;
+    }
+    final missing = <StyleProperty>{};
+    for (final style in vector.usedStyles) {
+      if (!_styleResolver.contains(style)) {
+        missing.add(style);
+      }
+    }
+    if (missing.isEmpty) {
+      return;
+    }
+    // ignore: avoid_print
+    print('The following styles are missing: ${missing.toList()}');
+  }
+
   final Cache<Vector, VectorValues> _vectorCache = SingleCache();
   final Cache<Group, GroupValues> _groupCache = MapCache();
+  final Cache<AffineGroup, GroupValues> _affineGroupCache = MapCache();
   final Cache<Path, PathValues> _pathCache = MapCache();
   final Cache<ClipPath, ClipPathValues> _clipPathCache = MapCache();
   final Cache<ChildOutlet, ChildOutletValues> _childOutletCache = SingleCache();
@@ -43,8 +66,14 @@ class VectorRenderingContext {
     if (identical(_vector, vector)) {
       return needsNothing;
     }
+    _vectorCache.clear();
     _groupCache.clear();
+    _affineGroupCache.clear();
     _pathCache.clear();
+    _clipPathCache.clear();
+    _childOutletCache.clear();
+    _childOutletAndParentsCache.clear();
+
     var needs = needsNothing;
     if (vector.width != _vector.width || vector.height != _vector.height) {
       // TODO: if there is an child outlet, we also need to layout again if the child outlet and/or transforms that are parent to it have changed
@@ -114,6 +143,13 @@ class VectorRenderingContext {
           }
         }
       }
+      if (cacheAffineGroup(cachingStrategy)) {
+        for (final g in _affineGroupCache.keys.toList()) {
+          if (styleResolver.containsAny(g.localUsedStyles)) {
+            _affineGroupCache.remove(g);
+          }
+        }
+      }
       if (cacheClipPath(cachingStrategy)) {
         for (final cp in _clipPathCache.keys.toList()) {
           if (styleResolver.containsAny(cp.localUsedStyles)) {
@@ -143,9 +179,11 @@ class VectorRenderingContext {
           }
         }
       }
+      _debugVerifyHasAllStyles();
       _styleResolver = styleResolver;
       return needs;
     } else {
+      _debugVerifyHasAllStyles();
       _styleResolver = styleResolver;
       return needsPaintFlag | needsChildLayoutFlag;
     }
@@ -170,6 +208,9 @@ class VectorRenderingContext {
     if (!cacheChildOutlet(cachingStrategy)) {
       _childOutletCache.clear();
     }
+    if (!cacheAffineGroup(cachingStrategy)) {
+      _affineGroupCache.clear();
+    }
   }
 
   Clip? _viewportClip = null;
@@ -189,28 +230,34 @@ class VectorRenderingContext {
       return _pathCache.putIfAbsent(
         path,
         () => PathValues(
-          path.pathData.resolve(styleResolver)!,
-          path.fillColor.resolve(styleResolver)!,
-          path.strokeColor.resolve(styleResolver)!,
-          path.strokeWidth.resolve(styleResolver)!,
-          path.strokeAlpha.resolve(styleResolver)!,
-          path.fillAlpha.resolve(styleResolver)!,
-          path.trimPathStart.resolve(styleResolver)!,
-          path.trimPathEnd.resolve(styleResolver)!,
-          path.trimPathOffset.resolve(styleResolver)!,
+          path.pathData.resolve(styleResolver) ??
+              _default(PathData.fromSegments([])),
+          path.fillColor.resolve(styleResolver) ??
+              _default(VectorColor.transparent),
+          path.strokeColor.resolve(styleResolver) ??
+              _default(VectorColor.transparent),
+          path.strokeWidth.resolve(styleResolver) ?? _default(1.0),
+          path.strokeAlpha.resolve(styleResolver) ?? _default(0.0),
+          path.fillAlpha.resolve(styleResolver) ?? _default(0.0),
+          path.trimPathStart.resolve(styleResolver) ?? _default(0.0),
+          path.trimPathEnd.resolve(styleResolver) ?? _default(1.0),
+          path.trimPathOffset.resolve(styleResolver) ?? _default(0.0),
         ),
       );
     } else {
       return PathValues(
-        path.pathData.resolve(styleResolver)!,
-        path.fillColor.resolve(styleResolver)!,
-        path.strokeColor.resolve(styleResolver)!,
-        path.strokeWidth.resolve(styleResolver)!,
-        path.strokeAlpha.resolve(styleResolver)!,
-        path.fillAlpha.resolve(styleResolver)!,
-        path.trimPathStart.resolve(styleResolver)!,
-        path.trimPathEnd.resolve(styleResolver)!,
-        path.trimPathOffset.resolve(styleResolver)!,
+        path.pathData.resolve(styleResolver) ??
+            _default(PathData.fromSegments([])),
+        path.fillColor.resolve(styleResolver) ??
+            _default(VectorColor.transparent),
+        path.strokeColor.resolve(styleResolver) ??
+            _default(VectorColor.transparent),
+        path.strokeWidth.resolve(styleResolver) ?? _default(1.0),
+        path.strokeAlpha.resolve(styleResolver) ?? _default(0.0),
+        path.fillAlpha.resolve(styleResolver) ?? _default(0.0),
+        path.trimPathStart.resolve(styleResolver) ?? _default(0.0),
+        path.trimPathEnd.resolve(styleResolver) ?? _default(1.0),
+        path.trimPathOffset.resolve(styleResolver) ?? _default(0.0),
       );
     }
   }
@@ -230,23 +277,6 @@ class VectorRenderingContext {
         ),
       );
     }
-    final vs = GroupValues(
-      group.rotation.resolve(styleResolver),
-      group.pivotX.resolve(styleResolver),
-      group.pivotY.resolve(styleResolver),
-      group.scaleX.resolve(styleResolver),
-      group.scaleY.resolve(styleResolver),
-      group.translateX.resolve(styleResolver),
-      group.translateY.resolve(styleResolver),
-    );
-    if ((group.name == 'g28' || group.name == 'g28-2') && false) {
-      print(group.name);
-      print(vs.transform);
-      print(group.translateX.resolve(styleResolver));
-      print(group.translateY.resolve(styleResolver));
-    }
-    return vs;
-
     return GroupValues(
       group.rotation.resolve(styleResolver),
       group.pivotX.resolve(styleResolver),
@@ -258,23 +288,39 @@ class VectorRenderingContext {
     );
   }
 
+  GroupValues groupValuesForAffine(AffineGroup group) {
+    if (cacheAffineGroup(cachingStrategy)) {
+      return _affineGroupCache.putIfAbsent(
+        group,
+        () => GroupValues.affineTransformOrTransformList(
+          group.tempTransformList.resolve(styleResolver),
+        ),
+      );
+    }
+    return GroupValues.affineTransformOrTransformList(
+      group.tempTransformList.resolve(styleResolver),
+    );
+  }
+
+  T _default<T extends Object>(T value) => value;
+
   ChildOutletValues childOutletValuesFor(ChildOutlet childOutlet) {
     if (cacheChildOutlet(cachingStrategy)) {
       return _childOutletCache.putIfAbsent(
         childOutlet,
         () => ChildOutletValues(
-          childOutlet.x.resolve(styleResolver)!,
-          childOutlet.y.resolve(styleResolver)!,
-          childOutlet.width.resolve(styleResolver)!,
-          childOutlet.height.resolve(styleResolver)!,
+          childOutlet.x.resolve(styleResolver) ?? _default(0.0),
+          childOutlet.y.resolve(styleResolver) ?? _default(0.0),
+          childOutlet.width.resolve(styleResolver) ?? _default(20.0),
+          childOutlet.height.resolve(styleResolver) ?? _default(20.0),
         ),
       );
     }
     return ChildOutletValues(
-      childOutlet.x.resolve(styleResolver)!,
-      childOutlet.y.resolve(styleResolver)!,
-      childOutlet.width.resolve(styleResolver)!,
-      childOutlet.height.resolve(styleResolver)!,
+      childOutlet.x.resolve(styleResolver) ?? _default(0.0),
+      childOutlet.y.resolve(styleResolver) ?? _default(0.0),
+      childOutlet.width.resolve(styleResolver) ?? _default(20.0),
+      childOutlet.height.resolve(styleResolver) ?? _default(20.0),
     );
   }
 
@@ -283,12 +329,14 @@ class VectorRenderingContext {
       return _clipPathCache.putIfAbsent(
         clipPath,
         () => ClipPathValues(
-          clipPath.pathData.resolve(styleResolver)!,
+          clipPath.pathData.resolve(styleResolver) ??
+              _default(PathData.fromSegments([])),
         ),
       );
     }
     return ClipPathValues(
-      clipPath.pathData.resolve(styleResolver)!,
+      clipPath.pathData.resolve(styleResolver) ??
+          _default(PathData.fromSegments([])),
     );
   }
 
@@ -314,19 +362,11 @@ class VectorRenderingContext {
           el.parents.skip(1).cast<VectorPart>().toList(),
         );
       }
-      if (el.node is Group) {
+      if (el.node is VectorPartWithChildren) {
         searchStack.pushChildren(
           el.node,
           el.parents,
-          (el.node as Group).children,
-        );
-        continue;
-      }
-      if (el.node is ClipPath) {
-        searchStack.pushChildren(
-          el.node,
-          el.parents,
-          (el.node as ClipPath).children,
+          (el.node as VectorPartWithChildren).children,
         );
         continue;
       }
@@ -369,8 +409,10 @@ class VectorRenderingContext {
         ChildOutletTransformOrClipPath(vectorTransform, null);
     final allOperations = <ChildOutletTransformOrClipPath>[];
     for (final parent in cops.parentsOtherThanRoot) {
-      if (parent is Group) {
-        final values = groupValuesFor(parent);
+      if (parent is Group || parent is AffineGroup) {
+        final values = parent is Group
+            ? groupValuesFor(parent)
+            : groupValuesForAffine(parent as AffineGroup);
         final groupTransform = values.transform;
         if (groupTransform == null) {
           continue;
@@ -430,6 +472,44 @@ class ClipPathValues {
 class GroupValues {
   final Matrix4? transform;
 
+  factory GroupValues.affine(
+    double? rotation,
+    double? scaleX,
+    double? scaleY,
+    double? translateX,
+    double? translateY,
+  ) {
+    if (_groupHasTransform(rotation, scaleX, scaleY, translateX, translateY)) {
+      return GroupValues._(
+        _affineGroupTransform(
+          rotation ?? 0,
+          scaleX ?? 1,
+          scaleY ?? 1,
+          translateX ?? 0,
+          translateY ?? 0,
+        ).getMatrix(),
+      );
+    }
+    return const GroupValues._(null);
+  }
+  factory GroupValues.affineTransformOrTransformList(
+      TransformOrTransformList? transformOrTransformList) {
+    if (transformOrTransformList == null) {
+      return const GroupValues._(null);
+    }
+    if (transformOrTransformList is NoneTransform) {
+      return const GroupValues._(null);
+    }
+    if ((transformOrTransformList is TransformList) &&
+        transformOrTransformList.transforms.isEmpty) {
+      return const GroupValues._(null);
+    }
+    final matrix = transformOrTransformList.toMatrix();
+    if (matrix.isIdentity()) {
+      return const GroupValues._(null);
+    }
+    return GroupValues._(matrix.getMatrix());
+  }
   factory GroupValues(
     double? rotation,
     double? pivotX,
@@ -488,6 +568,27 @@ class GroupValues {
   static Matrix4 _postRotate(double degrees, Matrix4 matrix) {
     final t = Matrix4.rotationZ(degrees);
     return t.multiplied(matrix);
+  }
+
+  static AffineMatrix _affineGroupTransform(
+    double rotation,
+    double scaleX,
+    double scaleY,
+    double translateX,
+    double translateY,
+  ) {
+    final affineMatrix = AffineMatrix.identity();
+    affineMatrix
+      ..translate(Vector2(
+        translateX,
+        translateY,
+      ))
+      ..rotate(rotation)
+      ..scale(
+        scaleX,
+        scaleY,
+      );
+    return affineMatrix;
   }
 
   //And the transformations are applied in the order of scale, rotate then translate.

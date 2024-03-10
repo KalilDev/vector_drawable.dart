@@ -1,0 +1,381 @@
+library generated;
+
+import 'package:vector_drawable_core/vector_drawable_core.dart';
+import 'package:vector_drawable_from_svg/src/visitors/extract_used_styles_visitor.dart';
+
+class ExtractedResolver extends StyleResolverWithEfficientContains {
+  final StyleResolverWithEfficientContains _values;
+  const ExtractedResolver.raw(StyleResolverWithEfficientContains values)
+      : _values = values;
+  const factory ExtractedResolver.overriden(
+    ExtractedResolver base,
+    ElementType elementType,
+    String elementName, {
+    required Map<String, ValueOrProperty> overrides,
+  }) = _ResolverOverride;
+  // todo: Optimize
+  factory ExtractedResolver.manyOverriden(
+    ExtractedResolver base, {
+    required Map<OverrideTarget, ElementOverrides> overrides,
+  }) {
+    for (final to in overrides.entries) {
+      final t = to.key;
+      final o = to.value;
+      base = base.overrideElement(t.type, t.name, overrides: o);
+    }
+    return base;
+  }
+  ExtractedResolver(Map<String, ValueOrProperty<Object>> values)
+      : _values = StyleResolverWithEfficientContains.fromMap(
+          values,
+          namespace: 'extractedFromElement',
+        );
+
+  bool contains(StyleProperty prop) => _values.contains(prop);
+  @override
+  bool containsAny(covariant Iterable<StyleProperty> props) =>
+      _values.containsAny(props);
+
+  @override
+  Object? resolveUntyped(StyleProperty property) {
+    final resolved = _values.resolveUntyped(property);
+    if (resolved is Value) {
+      return resolved.value;
+    }
+    return resolved;
+  }
+
+  ExtractedResolver overrideElement(ElementType elementType, String elementName,
+          {required Map<String, ValueOrProperty> overrides}) =>
+      ExtractedResolver.overriden(this, elementType, elementName,
+          overrides: overrides);
+}
+
+class OverrideTarget {
+  final ElementType type;
+  final String name;
+
+  const OverrideTarget(this.type, this.name);
+}
+
+typedef ElementOverrides = Map<String, ValueOrProperty>;
+
+class _ResolverOverride extends StyleResolverWithEfficientContains
+    implements ExtractedResolver {
+  final ExtractedResolver base;
+  final ElementType element;
+  final String elementName;
+  final ElementOverrides overrides;
+
+  const _ResolverOverride(this.base, this.element, this.elementName,
+      {required this.overrides});
+
+  @override
+  bool contains(StyleProperty prop) {
+    if (_values.contains(prop)) {
+      return true;
+    }
+    if (prop.namespace != 'extractedFromElement') {
+      return false;
+    }
+    final parsed = ElementNameTypeAndPropertyName.parse(prop.name);
+    if (parsed.type != element || parsed.name != elementName) {
+      return false;
+    }
+    return overrides.containsKey(parsed.propertyName);
+  }
+
+  @override
+  StyleResolverWithEfficientContains get _values => base;
+
+  @override
+  bool containsAny(covariant Iterable<StyleProperty> props) {
+    if (_values.containsAny(props)) {
+      return true;
+    }
+    // TODO: optimize this
+    for (final contains in props.map(contains)) {
+      if (contains) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  @override
+  Object? resolveUntyped(StyleProperty prop) {
+    if (prop.namespace != 'extractedFromElement') {
+      return _values.resolveUntyped(prop);
+    }
+    final parsed = ElementNameTypeAndPropertyName.parse(prop.name);
+    if (parsed.type != element || parsed.name != elementName) {
+      return _values.resolveUntyped(prop);
+    }
+    if (overrides.containsKey(parsed.propertyName)) {
+      final p = overrides[parsed.propertyName];
+      return p is Value ? p.value : p;
+    }
+    return _values.resolveUntyped(prop);
+  }
+
+  @override
+  ExtractedResolver overrideElement(ElementType elementType, String elementName,
+      {required ElementOverrides overrides}) {
+    final isSameTargetAsThis =
+        elementType == element && elementName == this.elementName;
+    if (!isSameTargetAsThis) {
+      return ExtractedResolver.overriden(this, elementType, elementName,
+          overrides: overrides);
+    }
+    return _ResolverOverride(base, element, elementName, overrides: {
+      ...this.overrides,
+      ...overrides,
+    });
+  }
+}
+
+const Vector drawable = Vector(
+  name: r'ROOT',
+  width: Dimension(310.0, DimensionKind.dp),
+  height: Dimension(440.0, DimensionKind.dp),
+  viewportWidth: 310.0,
+  viewportHeight: 440.0,
+  tint: Property<VectorColor>(
+      StyleProperty(r'extractedFromElement', r'Vector-ROOT:tint')),
+  opacity: Property<double>(
+      StyleProperty(r'extractedFromElement', r'Vector-ROOT:opacity')),
+  children: [
+    Group(
+      name: r'g29',
+      rotation: Property<double>(
+          StyleProperty(r'extractedFromElement', r'Group-g29:rotation')),
+      pivotX: Property<double>(
+          StyleProperty(r'extractedFromElement', r'Group-g29:pivotX')),
+      pivotY: Property<double>(
+          StyleProperty(r'extractedFromElement', r'Group-g29:pivotY')),
+      scaleX: Property<double>(
+          StyleProperty(r'extractedFromElement', r'Group-g29:scaleX')),
+      scaleY: Property<double>(
+          StyleProperty(r'extractedFromElement', r'Group-g29:scaleY')),
+      translateX: Property<double>(
+          StyleProperty(r'extractedFromElement', r'Group-g29:translateX')),
+      translateY: Property<double>(
+          StyleProperty(r'extractedFromElement', r'Group-g29:translateY')),
+      children: [
+        Group(
+          name: r'g28',
+          rotation: Property<double>(
+              StyleProperty(r'extractedFromElement', r'Group-g28:rotation')),
+          pivotX: Property<double>(
+              StyleProperty(r'extractedFromElement', r'Group-g28:pivotX')),
+          pivotY: Property<double>(
+              StyleProperty(r'extractedFromElement', r'Group-g28:pivotY')),
+          scaleX: Property<double>(
+              StyleProperty(r'extractedFromElement', r'Group-g28:scaleX')),
+          scaleY: Property<double>(
+              StyleProperty(r'extractedFromElement', r'Group-g28:scaleY')),
+          translateX: Property<double>(
+              StyleProperty(r'extractedFromElement', r'Group-g28:translateX')),
+          translateY: Property<double>(
+              StyleProperty(r'extractedFromElement', r'Group-g28:translateY')),
+          children: [
+            Path(
+              name: r'path27',
+              pathData: Property<PathData>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27:pathData')),
+              fillColor: Property<VectorColor>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27:fillColor')),
+              strokeColor: Property<VectorColor>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27:strokeColor')),
+              strokeWidth: Property<double>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27:strokeWidth')),
+              strokeAlpha: Property<double>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27:strokeAlpha')),
+              fillAlpha: Property<double>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27:fillAlpha')),
+              trimPathStart: Property<double>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27:trimPathStart')),
+              trimPathEnd: Property<double>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27:trimPathEnd')),
+              trimPathOffset: Property<double>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27:trimPathOffset')),
+              strokeLineCap: StrokeLineCap.round,
+              strokeLineJoin: StrokeLineJoin.round,
+            ),
+            Path(
+              name: r'path27-3-9',
+              pathData: Property<PathData>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27-3-9:pathData')),
+              fillColor: Property<VectorColor>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27-3-9:fillColor')),
+              strokeColor: Property<VectorColor>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27-3-9:strokeColor')),
+              strokeWidth: Property<double>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27-3-9:strokeWidth')),
+              strokeAlpha: Property<double>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27-3-9:strokeAlpha')),
+              fillAlpha: Property<double>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27-3-9:fillAlpha')),
+              trimPathStart: Property<double>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27-3-9:trimPathStart')),
+              trimPathEnd: Property<double>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27-3-9:trimPathEnd')),
+              trimPathOffset: Property<double>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27-3-9:trimPathOffset')),
+              strokeLineCap: StrokeLineCap.round,
+              strokeLineJoin: StrokeLineJoin.round,
+            ),
+          ],
+        ),
+        ChildOutlet(
+          x: Property<double>(StyleProperty(
+              r'extractedFromElement', r'ChildOutlet-ChildOutlet:x')),
+          y: Property<double>(StyleProperty(
+              r'extractedFromElement', r'ChildOutlet-ChildOutlet:y')),
+          width: Property<double>(StyleProperty(
+              r'extractedFromElement', r'ChildOutlet-ChildOutlet:width')),
+          height: Property<double>(StyleProperty(
+              r'extractedFromElement', r'ChildOutlet-ChildOutlet:height')),
+        ),
+        Group(
+          name: r'g28-2',
+          rotation: Property<double>(
+              StyleProperty(r'extractedFromElement', r'Group-g28-2:rotation')),
+          pivotX: Property<double>(
+              StyleProperty(r'extractedFromElement', r'Group-g28-2:pivotX')),
+          pivotY: Property<double>(
+              StyleProperty(r'extractedFromElement', r'Group-g28-2:pivotY')),
+          scaleX: Property<double>(
+              StyleProperty(r'extractedFromElement', r'Group-g28-2:scaleX')),
+          scaleY: Property<double>(
+              StyleProperty(r'extractedFromElement', r'Group-g28-2:scaleY')),
+          translateX: Property<double>(StyleProperty(
+              r'extractedFromElement', r'Group-g28-2:translateX')),
+          translateY: Property<double>(StyleProperty(
+              r'extractedFromElement', r'Group-g28-2:translateY')),
+          children: [
+            Path(
+              name: r'path27-6',
+              pathData: Property<PathData>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27-6:pathData')),
+              fillColor: Property<VectorColor>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27-6:fillColor')),
+              strokeColor: Property<VectorColor>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27-6:strokeColor')),
+              strokeWidth: Property<double>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27-6:strokeWidth')),
+              strokeAlpha: Property<double>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27-6:strokeAlpha')),
+              fillAlpha: Property<double>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27-6:fillAlpha')),
+              trimPathStart: Property<double>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27-6:trimPathStart')),
+              trimPathEnd: Property<double>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27-6:trimPathEnd')),
+              trimPathOffset: Property<double>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27-6:trimPathOffset')),
+              strokeLineCap: StrokeLineCap.round,
+              strokeLineJoin: StrokeLineJoin.round,
+            ),
+            Path(
+              name: r'path27-3-9-6',
+              pathData: Property<PathData>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27-3-9-6:pathData')),
+              fillColor: Property<VectorColor>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27-3-9-6:fillColor')),
+              strokeColor: Property<VectorColor>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27-3-9-6:strokeColor')),
+              strokeWidth: Property<double>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27-3-9-6:strokeWidth')),
+              strokeAlpha: Property<double>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27-3-9-6:strokeAlpha')),
+              fillAlpha: Property<double>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27-3-9-6:fillAlpha')),
+              trimPathStart: Property<double>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27-3-9-6:trimPathStart')),
+              trimPathEnd: Property<double>(StyleProperty(
+                  r'extractedFromElement', r'Path-path27-3-9-6:trimPathEnd')),
+              trimPathOffset: Property<double>(StyleProperty(
+                  r'extractedFromElement',
+                  r'Path-path27-3-9-6:trimPathOffset')),
+              strokeLineCap: StrokeLineCap.round,
+              strokeLineJoin: StrokeLineJoin.round,
+            ),
+          ],
+        ),
+      ],
+    ),
+  ],
+);
+
+/// Style resolver
+const styleResolver =
+    ExtractedResolver.raw(StyleResolverWithEfficientContains.fromMap({
+  'Vector-ROOT:tint': Value<VectorColor>(VectorColor(0x00000000)),
+  'Vector-ROOT:opacity': Value<double>(1.0),
+  'Group-g29:rotation': Value<double>(0.0),
+  'Group-g29:pivotX': Value<double>(0.0),
+  'Group-g29:pivotY': Value<double>(0.0),
+  'Group-g29:scaleX': Value<double>(1.0),
+  'Group-g29:scaleY': Value<double>(1.0),
+  'Group-g29:translateX': Value<double>(0.0),
+  'Group-g29:translateY': Value<double>(0.0),
+  'Group-g28:rotation': Value<double>(0.0),
+  'Group-g28:pivotX': Value<double>(0.0),
+  'Group-g28:pivotY': Value<double>(0.0),
+  'Group-g28:scaleX': Value<double>(1.0),
+  'Group-g28:scaleY': Value<double>(1.0),
+  'Group-g28:translateX': Value<double>(0.0),
+  'Group-g28:translateY': Value<double>(0.0),
+  'Path-path27:pathData': Value<PathData>(PathData.fromStringRaw(
+      'M149.607421875 0.12886010110378265 C91.02156066894531 3.0044307708740234 44.99820327758789 51.343563079833984 44.999996185302734 109.99995422363281 C44.999996185302734 170.75131225585938 94.24867248535156 219.99998474121094 155.0 219.99998474121094 C215.75131225585938 219.99998474121094 265.0 269.2486572265625 265.0 330.0 C265.0 390.7513122558594 215.75132751464844 439.9999694824219 155.0 439.9999694824219 C33.49735641479492 439.9999694824219 -65.0 341.50262451171875 -65.0 219.99998474121094 C-64.9659423828125 100.6225357055664 30.265872955322266 3.055022716522217 149.607421875 0.12886010110378265 Z')),
+  'Path-path27:fillColor': Value<VectorColor>(VectorColor(0xffa82e3d)),
+  'Path-path27:strokeColor': Value<VectorColor>(VectorColor(0x00000000)),
+  'Path-path27:strokeWidth': Value<double>(4.891816423484802),
+  'Path-path27:strokeAlpha': Value<double>(0.0),
+  'Path-path27:fillAlpha': Value<double>(1.0),
+  'Path-path27:trimPathStart': Value<double>(0.0),
+  'Path-path27:trimPathEnd': Value<double>(1.0),
+  'Path-path27:trimPathOffset': Value<double>(0.0),
+  'Path-path27-3-9:pathData': Value<PathData>(PathData.fromStringRaw(
+      'M127.5 330.0 C127.5 345.1877746582031 139.81216430664062 357.4999694824219 155.0 357.4999694824219 C170.18783569335938 357.4999694824219 182.50001525878906 345.1877746582031 182.5 329.99993896484375 C182.5 314.8121337890625 170.18783569335938 302.4999694824219 155.0 302.4999694824219 C139.8121795654297 302.4999694824219 127.50000762939453 314.8121337890625 127.5 329.99993896484375 Z')),
+  'Path-path27-3-9:fillColor': Value<VectorColor>(VectorColor(0xff9c4dcc)),
+  'Path-path27-3-9:strokeColor': Value<VectorColor>(VectorColor(0x00000000)),
+  'Path-path27-3-9:strokeWidth': Value<double>(0.6114780923057556),
+  'Path-path27-3-9:strokeAlpha': Value<double>(0.0),
+  'Path-path27-3-9:fillAlpha': Value<double>(1.0),
+  'Path-path27-3-9:trimPathStart': Value<double>(0.0),
+  'Path-path27-3-9:trimPathEnd': Value<double>(1.0),
+  'Path-path27-3-9:trimPathOffset': Value<double>(0.0),
+  'ChildOutlet-ChildOutlet:x': Value<double>(-50.34560012817383),
+  'ChildOutlet-ChildOutlet:y': Value<double>(67.65361785888672),
+  'ChildOutlet-ChildOutlet:width': Value<double>(188.87334060668945),
+  'ChildOutlet-ChildOutlet:height': Value<double>(345.34180450439453),
+  'Group-g28-2:rotation': Value<double>(0.0),
+  'Group-g28-2:pivotX': Value<double>(0.0),
+  'Group-g28-2:pivotY': Value<double>(0.0),
+  'Group-g28-2:scaleX': Value<double>(1.0),
+  'Group-g28-2:scaleY': Value<double>(1.0),
+  'Group-g28-2:translateX': Value<double>(0.0),
+  'Group-g28-2:translateY': Value<double>(0.0),
+  'Path-path27-6:pathData': Value<PathData>(PathData.fromStringRaw(
+      'M160.39259338378906 439.87109375 C218.97845458984375 436.9955139160156 265.0018005371094 388.6563720703125 265.0000305175781 329.9999694824219 C265.0000305175781 269.2486267089844 215.7513427734375 219.9999542236328 155.00001525878906 219.9999542236328 C94.24869537353516 219.9999542236328 45.00001907348633 170.7512664794922 45.00000762939453 109.99995422363281 C45.00000762939453 49.248634338378906 94.24868774414062 -0.000042016428778879344 155.00001525878906 -0.000042016428778879344 C276.5026550292969 -0.000042016428778879344 375.0 98.497314453125 375.0 219.9999542236328 C374.9659423828125 339.3774108886719 279.734130859375 436.9449157714844 160.39259338378906 439.87109375 Z')),
+  'Path-path27-6:fillColor': Value<VectorColor>(VectorColor(0xff9c4dcc)),
+  'Path-path27-6:strokeColor': Value<VectorColor>(VectorColor(0x00000000)),
+  'Path-path27-6:strokeWidth': Value<double>(4.891816423484802),
+  'Path-path27-6:strokeAlpha': Value<double>(0.0),
+  'Path-path27-6:fillAlpha': Value<double>(1.0),
+  'Path-path27-6:trimPathStart': Value<double>(0.0),
+  'Path-path27-6:trimPathEnd': Value<double>(1.0),
+  'Path-path27-6:trimPathOffset': Value<double>(0.0),
+  'Path-path27-3-9-6:pathData': Value<PathData>(PathData.fromStringRaw(
+      'M182.50001525878906 109.99995422363281 C182.50001525878906 94.8121566772461 170.18785095214844 82.49996185302734 155.00001525878906 82.49996185302734 C139.8121795654297 82.49996185302734 127.50000762939453 94.8121566772461 127.50000762939453 109.99999237060547 C127.50001525878906 125.18778991699219 139.8121795654297 137.49998474121094 155.00001525878906 137.49998474121094 C170.18783569335938 137.49998474121094 182.50001525878906 125.18778991699219 182.50001525878906 109.99999237060547 Z')),
+  'Path-path27-3-9-6:fillColor': Value<VectorColor>(VectorColor(0xffa82e3d)),
+  'Path-path27-3-9-6:strokeColor': Value<VectorColor>(VectorColor(0x00000000)),
+  'Path-path27-3-9-6:strokeWidth': Value<double>(0.6114780923057556),
+  'Path-path27-3-9-6:strokeAlpha': Value<double>(0.0),
+  'Path-path27-3-9-6:fillAlpha': Value<double>(1.0),
+  'Path-path27-3-9-6:trimPathStart': Value<double>(0.0),
+  'Path-path27-3-9-6:trimPathEnd': Value<double>(1.0),
+  'Path-path27-3-9-6:trimPathOffset': Value<double>(0.0)
+}, namespace: 'extractedFromElement'));

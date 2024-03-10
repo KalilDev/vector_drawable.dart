@@ -10,6 +10,8 @@ dependencies:
   vector_math: ^2.0.0
   xml: ^5.3.1
   path_parsing: ^1.0.0
+  vector_drawable_path_utils:
+    path: ../vector_drawable_path_utils
 
 dev_dependencies:
   lints: ^2.0.0

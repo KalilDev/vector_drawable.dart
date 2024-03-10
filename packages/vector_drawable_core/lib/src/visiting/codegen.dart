@@ -1,3 +1,5 @@
+import 'package:vector_drawable_core/model.dart';
+
 import '../serializing/util.dart';
 
 import '../model/color.dart';
@@ -96,6 +98,85 @@ StringBuffer _visitValue(Object node, StringBuffer context) {
     _visitStringify(node, context);
   }
   return context;
+}
+
+StringBuffer _visitTransform(Transform val, StringBuffer context) {
+  if (val is NoneTransform) {
+    context.write('Transform.none');
+    return context;
+  }
+
+  if (val is Scale) {
+    context
+      ..write('Scale(')
+      ..write(val.x)
+      ..write(', ')
+      ..write(val.y);
+  } else if (val is Translate) {
+    context
+      ..write('Translate(')
+      ..write(val.x)
+      ..write(', ')
+      ..write(val.y);
+  } else if (val is Matrix) {
+    context
+      ..write('Matrix(')
+      ..write(val.a)
+      ..write(', ')
+      ..write(val.b)
+      ..write(', ')
+      ..write(val.c)
+      ..write(', ')
+      ..write(val.d)
+      ..write(', ')
+      ..write(val.tx)
+      ..write(', ')
+      ..write(val.ty);
+  } else if (val is Rotate) {
+    context
+      ..write('Rotate(')
+      ..write(val.radians);
+    if (val.x != null && val.y != null) {
+      context
+        ..write(', ')
+        ..write(val.x)
+        ..write(', ')
+        ..write(val.y);
+    }
+  } else if (val is ScaleX) {
+    context
+      ..write('ScaleX(')
+      ..write(val.x);
+  } else if (val is ScaleY) {
+    context
+      ..write('ScaleY(')
+      ..write(val.y);
+  } else {
+    throw TypeError();
+  }
+  context.write(')');
+  return context;
+}
+
+StringBuffer _visitTransformList(TransformList val, StringBuffer context) {
+  context.write('TransformList([');
+  for (final t in val.transforms) {
+    _visitTransform(t, context);
+    context.write(',');
+  }
+  context.write('])');
+  return context;
+}
+
+StringBuffer visitTransformOrTransformList(
+    TransformOrTransformList val, StringBuffer context) {
+  if (val is TransformList) {
+    return _visitTransformList(val, context);
+  }
+  if (val is Transform) {
+    return _visitTransform(val, context);
+  }
+  throw TypeError();
 }
 
 StringBuffer _visitStyleOrValue(
@@ -247,6 +328,35 @@ class CodegenVectorDrawableVisitor
   }
 
   @override
+  StringBuffer visitAffineGroup(AffineGroup node, [StringBuffer? context]) {
+    context ??= StringBuffer();
+    context.write('AffineGroup(');
+    _writeNamedOrNull('name', context, node.name, _visitString);
+    _maybeWriteStyleNamed(
+        'rotation', context, node.rotation, 0.0, _visitStringify);
+    _maybeWriteStyleNamed('scaleX', context, node.scaleX, 1.0, _visitStringify);
+    _maybeWriteStyleNamed('scaleY', context, node.scaleY, 1.0, _visitStringify);
+    _maybeWriteStyleNamed(
+        'translateX', context, node.translateX, 0.0, _visitStringify);
+    _maybeWriteStyleNamed(
+        'translateY', context, node.translateY, 0.0, _visitStringify);
+    _maybeWriteStyleNamed<TransformOrTransformList>(
+        'tempTransformList',
+        context,
+        node.tempTransformList,
+        Transform.none,
+        visitTransformOrTransformList);
+    context.write('children: [');
+    for (final child in node.children) {
+      visitVectorPart(child, context);
+      context.write(', ');
+    }
+    context.write('],');
+    context.write(')');
+    return context;
+  }
+
+  @override
   StringBuffer visitPath(Path node, [StringBuffer? context]) {
     context ??= StringBuffer();
     context.write('Path(');
@@ -298,6 +408,8 @@ class CodegenVectorDrawableVisitor
       visitClipPath(node, context);
     } else if (node is ChildOutlet) {
       visitChildOutlet(node, context);
+    } else if (node is AffineGroup) {
+      visitAffineGroup(node, context);
     } else {
       throwUnimplemented();
     }
@@ -308,8 +420,8 @@ class CodegenVectorDrawableVisitor
   StringBuffer visitChildOutlet(ChildOutlet node, [StringBuffer? context]) {
     context ??= StringBuffer();
     context.write('ChildOutlet(');
-    _maybeWriteStyleNamed('x', context, node.x, 0.0, _visitStringify);
-    _maybeWriteStyleNamed('y', context, node.y, 0.0, _visitStringify);
+    _writeStyleNamed('x', context, node.x, _visitStringify);
+    _writeStyleNamed('y', context, node.y, _visitStringify);
     _writeStyleNamed('width', context, node.width, _visitStringify);
     _writeStyleNamed('height', context, node.height, _visitStringify);
     context.write(')');

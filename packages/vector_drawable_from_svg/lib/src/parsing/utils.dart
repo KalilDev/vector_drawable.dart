@@ -1,11 +1,7 @@
-import 'dart:io';
-import 'dart:math';
-
 import 'package:vector_drawable_core/model.dart';
 import 'package:vector_drawable_core/parsing.dart';
-import 'package:vector_drawable_core/serializing.dart';
 import 'package:vector_drawable_from_svg/src/model/svg_vector_drawable.dart';
-import 'package:vector_math/vector_math.dart'
+import 'package:vector_math/vector_math_64.dart'
     show
         Vector3,
         Matrix3,
@@ -15,8 +11,8 @@ import 'package:vector_math/vector_math.dart'
         degrees2Radians,
         radians2Degrees;
 import 'package:xml/xml.dart';
-import 'package:path_parsing/src/path_parsing.dart';
-import 'package:path_parsing/src/path_segment_type.dart';
+
+import 'parent_data.dart';
 
 const kInkscapeXmlNamespace = 'http://www.inkscape.org/namespaces/inkscape';
 const kSodipodiXmlNamespace =
@@ -26,319 +22,6 @@ const kGlobalNamespace = kSvgXmlNamespace;
 const kRdfXmlNamespace = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
 const kCcXmlNamespace = 'http://creativecommons.org/ns#';
 const kDcXmlNamespace = 'http://purl.org/dc/elements/1.1/';
-
-class Matrix4AffineMatrix extends AffineMatrix {
-  final Matrix4 _matrix;
-  static const _ignoreM410 = false;
-  Matrix4AffineMatrix(
-    double a,
-    double b,
-    double c,
-    double d,
-    double e,
-    double f, [
-    double? m4_10,
-  ])  : _matrix = Matrix4.fromList([
-          a, b, 0, 0, //
-          c, d, 0, 0, //
-          0, 0, _ignoreM410 ? 1.0 : m4_10 ?? (1.0 * a), 0, //
-          e, f, 0, 1.0, //
-        ]),
-        super._();
-  factory Matrix4AffineMatrix.identity() =>
-      Matrix4AffineMatrix(1, 0, 0, 1, 0, 0);
-  double get a => _matrix.row0[0];
-  double get b => _matrix.row1[0];
-  double get c => _matrix.row0[1];
-  double get d => _matrix.row1[1];
-  double get e => _matrix.row0[3];
-  double get f => _matrix.row1[3];
-
-  AffineMatrix clone() => Matrix4AffineMatrix.identity()..setFromOther(this);
-
-  void _rotateRadians(double radians) {
-    _matrix.rotateZ(radians);
-  }
-
-  void _setFromOther(Matrix4AffineMatrix other) {
-    _matrix.setFrom(other._matrix);
-  }
-
-  void setFromOther(Matrix4AffineMatrix other) {
-    _setFromOther(other);
-  }
-
-  void translate(Vector2 offset) {
-    super.translate(offset);
-    return;
-    // FIXME
-
-    // final translated = offset.clone();
-    // scalePoint(translated);
-    // print(translated);
-    // final col = _matrix.getColumn(3);
-    // col.x = translated.x;
-    // col.y = translated.y;
-    // _matrix.setColumn(3, col);
-
-    final lastCol = Vector4(offset.x, offset.y, 0, 1);
-    final translationMatrix = Matrix4.identity()
-      ..setColumn(3, lastCol)
-      ..setColumn(2, Vector4(0, 0, 1, 0));
-
-    translationMatrix.multiply(_matrix);
-    _matrix.setFrom(translationMatrix);
-  }
-
-  double get _m4_10 => _matrix.row2[2];
-
-  void multiply(Matrix4AffineMatrix other) {
-    _matrix.multiply(other._matrix);
-  }
-
-  void rotate(double radians, [Vector2? center]) {
-    super.rotate(radians, center);
-    return;
-    if (center == null) {
-      _rotateRadians(radians);
-      return;
-    }
-    _matrix.multiply(Matrix4_rotation(radians, center));
-  }
-
-  String toCssString() {
-    String n(double d) => d.toStringAsFixed(4);
-    return "${super.toCssString()} // _m4_10 = ${n(_m4_10)}";
-  }
-
-  void transformPoint(Vector2 point) {
-    final temp = Vector4(point.x, point.y, 1, 1);
-    _matrix.transform(temp);
-    point.x = temp.x;
-    point.y = temp.y;
-  }
-
-  void scalePoint(Vector2 point) {
-    final temp = Vector4(point.x, point.y, 0, 0);
-    _matrix.transform(temp);
-    point.x = temp.x;
-    point.y = temp.y;
-  }
-
-  @override
-  String toString() => '''
-[ $a, $c, $e ]
-[ $b, $d, $f ]
-[ 0.0, 0.0, $_m4_10 ] // _m4_10 = $_m4_10
-''';
-
-  /// Creates a new affine matrix rotated by `x` and `y`.
-  ///
-  /// If `y` is not specified, it is defaulted to the same value as `x`.
-  void scale(double x, [double? y]) {
-    print(this);
-    super.scale(x, y);
-    print(this);
-    return;
-    y ??= x;
-    if (x == 1 && y == 1) {
-      return;
-    }
-    final scaleVec = Vector4(x, y, _ignoreM410 ? x : x, x);
-    final scaled = Matrix4.identity()..setDiagonal(scaleVec);
-    _matrix.multiply(scaled);
-  }
-}
-
-class Matrix3AffineMatrix extends AffineMatrix {
-  final Matrix3 _matrix;
-  Matrix3AffineMatrix(
-    double a,
-    double b,
-    double c,
-    double d,
-    double e,
-    double f,
-  )   : _matrix = Matrix3.fromList([
-          a, b, 0, //
-          c, d, 0, //
-          e, f, 1.0, //
-        ]),
-        super._();
-  Matrix3AffineMatrix.identity()
-      : _matrix = Matrix3.identity(),
-        super._();
-  double get a => _matrix[0];
-  double get b => _matrix[1];
-  double get c => _matrix[3];
-  double get d => _matrix[4];
-  double get e => _matrix[6];
-  double get f => _matrix[7];
-
-  AffineMatrix clone() => Matrix3AffineMatrix.identity()..setFromOther(this);
-
-  void setFromOther(Matrix3AffineMatrix other) {
-    _matrix.setFrom(other._matrix);
-  }
-
-  void translate(Vector2 offset) {
-    super.translate(offset);
-    /*
-    return;
-    // FIXME
-
-    // final translated = offset.clone();
-    // scalePoint(translated);
-    // print(translated);
-    // final col = _matrix.getColumn(3);
-    // col.x = translated.x;
-    // col.y = translated.y;
-    // _matrix.setColumn(3, col);
-
-    final lastCol = Vector4(offset.x, offset.y, 0, 1);
-    final translationMatrix = Matrix4.identity()
-      ..setColumn(3, lastCol)
-      ..setColumn(2, Vector4(0, 0, 1, 0));
-
-    translationMatrix.multiply(_matrix);
-    _matrix.setFrom(translationMatrix);*/
-  }
-
-  void multiply(Matrix3AffineMatrix other) {
-    _matrix.multiply(other._matrix);
-  }
-
-  void rotate(double radians, [Vector2? center]) {
-    super.rotate(radians, center);
-    return;
-    /*
-    if (center == null) {
-      _rotateRadians(radians);
-      return;
-    }
-    _matrix.multiply(Matrix4_rotation(radians, center));*/
-  }
-
-  void transformPoint(Vector2 point) {
-    final temp = Vector3(point.x, point.y, 1);
-    _matrix.transform(temp);
-    point.x = temp.x;
-    point.y = temp.y;
-  }
-
-  @override
-  String toString() => '''
-[ $a, $c, $e ]
-[ $b, $d, $f ]
-[ 0.0, 0.0, 1.0 ]
-''';
-
-  /// Creates a new affine matrix rotated by `x` and `y`.
-  ///
-  /// If `y` is not specified, it is defaulted to the same value as `x`.
-  void scale(double x, [double? y]) {
-    print(this);
-    super.scale(x, y);
-    print(this);
-    return; /*
-    y ??= x;
-    if (x == 1 && y == 1) {
-      return;
-    }
-    final scaleVec = Vector4(x, y, _ignoreM410 ? x : x, x);
-    final scaled = Matrix4.identity()..setDiagonal(scaleVec);
-    _matrix.multiply(scaled);*/
-  }
-}
-
-typedef AffineImpl = Matrix3AffineMatrix;
-
-abstract class AffineMatrix {
-  AffineMatrix._();
-  factory AffineMatrix(
-    double a,
-    double b,
-    double c,
-    double d,
-    double e,
-    double f,
-  ) = AffineImpl;
-  factory AffineMatrix.identity() = AffineImpl.identity;
-  factory AffineMatrix.translated(Vector2 offset) =>
-      AffineMatrix(1, 0, 0, 1, offset.x, offset.y);
-  factory AffineMatrix.rotated(double radians, [Vector2? center]) {
-    final pivot = center ?? Vector2.zero();
-    final cosTheta = cos(radians);
-    final sinTheta = sin(radians);
-    final pivotX = pivot.x;
-    final pivotY = pivot.y;
-    return AffineMatrix(
-      cosTheta,
-      sinTheta,
-      -sinTheta,
-      cosTheta,
-      pivotX * (1 - cosTheta) + pivotY * sinTheta,
-      pivotY * (1 - cosTheta) - pivotX * sinTheta,
-    );
-  }
-  factory AffineMatrix.scaled(Vector2 scale) =>
-      AffineMatrix(scale.x, 0, 0, scale.y, 0, 0);
-  double get a;
-  double get b;
-  double get c;
-  double get d;
-  double get e;
-  double get f;
-
-  AffineMatrix clone();
-
-  /// Calculates the scale for a stroke width based on the average of the x- and
-  /// y-axis scales of this matrix.
-  double scaleStrokeWidth(double width) {
-    if (a == 1 && d == 1) {
-      return width;
-    }
-
-    final double xScale = sqrt(a * a + c * c);
-    final double yScale = sqrt(b * b + d * d);
-
-    return (xScale + yScale) / 2 * width;
-  }
-
-  void setFromOther(covariant AffineMatrix other);
-
-  void translate(Vector2 offset) => multiply(AffineMatrix.translated(offset));
-
-  void multiply(covariant AffineMatrix other);
-
-  void premultiply(covariant AffineMatrix other) =>
-      setFromOther(other.clone()..multiply(this));
-
-  void rotate(double radians, [Vector2? center]) =>
-      multiply(AffineMatrix.rotated(radians, center));
-
-  String toCssString() {
-    String n(double d) => d.toStringAsFixed(4);
-    return 'matrix(${n(a)}, ${n(b)}, ${n(c)}, ${n(d)}, ${n(e)}, ${n(f)})';
-  }
-
-  void transformPoint(Vector2 point);
-
-  @override
-  String toString() => '''
-[ $a, $c, $e ]
-[ $b, $d, $f ]
-[ 0.0, 0.0, 1.0 ]
-''';
-
-  /// Creates a new affine matrix rotated by `x` and `y`.
-  ///
-  /// If `y` is not specified, it is defaulted to the same value as `x`.
-  void scale(double x, [double? y]) =>
-      multiply(AffineMatrix.scaled(Vector2(x, y ?? x)));
-}
-
-typedef StyleMap = Map<String, String>;
 
 extension ObjectMapE<T extends Object> on T {
   R mapSelfTo<R>(R Function(T) fn) => fn(this);
@@ -382,116 +65,6 @@ class PathStyle {
     this.strokeMiterLimit,
     this.fillType,
   );
-}
-
-void _parseTransformScale(String transform, ParentData localParentData) {
-  assert(transform.startsWith('scale('));
-  assert(transform.endsWith(')'));
-  // Assuming the matrix string is in the form "matrix(a, b, c, d, e, f)"
-  final matrixString = transform.substring(6, transform.length - 1);
-  List<double> values = matrixString
-      .split(",")
-      .map((str) => str.trim())
-      .map(double.parse)
-      .toList();
-  double x, y;
-  if (values.length == 1) {
-    x = values[0];
-    y = x;
-  } else if (values.length == 2) {
-    x = values[0];
-    y = values[1];
-  } else {
-    throw Exception('unsupported scale transform');
-  } 
-  localParentData.scaleBy(Vector2(x, y));
-}
-
-void _parseTransformMatrix(String transform, ParentData localParentData) {
-  assert(transform.startsWith('matrix('));
-  assert(transform.endsWith(')'));
-  // Assuming the matrix string is in the form "matrix(a, b, c, d, e, f)"
-  final matrixString = transform.substring(7, transform.length - 1);
-  List<double> values = matrixString
-      .split(",")
-      .map((str) => str.trim())
-      .map(double.parse)
-      .toList();
-
-  final a = values[0];
-  final b = values[1];
-  final c = values[2];
-  final d = values[3];
-  final tx = values[4];
-  final ty = values[5];
-  assert(values.length == 6);
-  localParentData.multiplyBy(
-    AffineMatrix(a, b, c, d, tx, ty),
-  );
-}
-
-void _parseTransformRotate(String transform, ParentData localParentData) {
-  assert(transform.startsWith('rotate('));
-  assert(transform.endsWith(')'));
-  // Assuming the matrix string is in the form "(a, b, c)"
-  final matrixString = transform.substring(7, transform.length - 1);
-  List<double> values = matrixString
-      .split(",")
-      .map((str) => str.trim())
-      .map(double.parse)
-      .toList();
-
-  if (values.length == 3) {
-    final a = values[0];
-    final b = values[1];
-    final c = values[2];
-    localParentData.rotate(a * degrees2Radians, Vector2(b, c));
-  } else {
-    assert(values.length == 1);
-    final a = values[0];
-    localParentData.rotate(a * degrees2Radians);
-  }
-}
-
-void _parseTransformTranslate(String transform, ParentData localParentData) {
-  assert(transform.startsWith('translate('));
-  assert(transform.endsWith(')'));
-  // Assuming the matrix string is in the form "(a, b)"
-  final matrixString = transform.substring(10, transform.length - 1);
-  List<double> values = matrixString
-      .split(",")
-      .map((str) => str.trim())
-      .map(double.parse)
-      .toList();
-
-  final a = values[0];
-  final b = values[1];
-  assert(values.length == 2);
-
-  double translateX = a;
-  double translateY = b;
-
-  localParentData.translateBy(Vector2(translateX, translateY));
-}
-
-void parseTransform(String transform, ParentData localParentData) {
-  if (transform.startsWith('matrix(')) {
-    _parseTransformMatrix(transform, localParentData);
-    return;
-  }
-  if (transform.startsWith('rotate(')) {
-    _parseTransformRotate(transform, localParentData);
-    return;
-  }
-  if (transform.startsWith('translate(')) {
-    _parseTransformTranslate(transform, localParentData);
-    return;
-  }
-  if (transform.startsWith('scale(')) {
-    _parseTransformScale(transform, localParentData);
-    return;
-  }
-  throwUnimplemented('unsuported transform "$transform"');
 }
 
 extension on StyleMap {
@@ -543,9 +116,13 @@ double parseDoubleIgnoreMeasure(String dbl) {
 T whenNone<T extends Object>(String? otherString,
         {required T none, required T notNone}) =>
     otherString == 'none' ? none : notNone;
-PathStyle parsePathStyle(String pathStyle, ParentData parentData) {
+PathStyle parsePathStyle(
+  String pathStyle, {
+  required double Function(double) scaleStrokeWidth,
+  required StyleMap parentStyles,
+}) {
   var styles = stylesFromStyleString(pathStyle);
-  styles = mergeStylesWithParent(styles, parentData.styles);
+  styles = mergeStylesWithParent(styles, parentStyles);
   const kFillColor = 'fill';
   const kFillOpacity = 'fill-opacity';
   const kFillType = 'fill-type';
@@ -627,7 +204,7 @@ PathStyle parsePathStyle(String pathStyle, ParentData parentData) {
     defaultValue: 0.0,
   );
 
-  strokeWidth = parentData.scaleStrokeWidth(strokeWidth);
+  strokeWidth = scaleStrokeWidth(strokeWidth);
   return PathStyle(
     fillColor,
     strokeColor,
@@ -666,15 +243,21 @@ Path pathFromStyleAndData(
       fillType: style.fillType,
     );
 
-Group groupFromTransformAndChildren(
-  ParentData parentData, {
+AffineGroup groupFromTransformAndChildren(
+  TransformList transformList, {
   String? name,
   required List<VectorPart> children,
-}) =>
-    Group(
-      name: name,
-      children: children,
-    );
+}) {
+  return AffineGroup(
+    name: name,
+    children: children,
+    tempTransformList: Value(transformList.transforms.isEmpty
+        ? Transform.none
+        : transformList.transforms.length == 1
+            ? transformList.transforms.single
+            : transformList),
+  );
+}
 
 SvgPath svgPathFromStyleAndData(
   PathStyle style, {
@@ -689,30 +272,13 @@ SvgPath svgPathFromStyleAndData(
   return SvgPath(idAndLabel, path);
 }
 
-SvgPath svgPathFromStyleStringAndData(
-  String styleString, {
-  required IdAndLabel idAndLabel,
-  required PathData pathData,
-  required ParentData parentData,
-  required String? pathTransformString,
-}) {
-  parentData.pushPathTransform(pathTransformString);
-  final res = svgPathFromStyleAndData(
-    parsePathStyle(styleString, parentData),
-    idAndLabel: idAndLabel,
-    pathData: parentData.multiplyPath(pathData),
-  );
-  parentData.popPathTransform(pathTransformString);
-  return res;
-}
-
 SvgGroup svgGroupFromTransformAndChildren(
-  ParentData localParentData, {
+  TransformList transformList, {
   required IdAndLabel idAndLabel,
   required List<SvgPart> children,
 }) {
   final group = groupFromTransformAndChildren(
-    localParentData,
+    transformList,
     name: idAndLabel.id,
     children: children.map((e) => e.part).toList(),
   );
@@ -722,25 +288,16 @@ SvgGroup svgGroupFromTransformAndChildren(
 }
 
 ParentData parentDataForGroupFromTransformString(
-    String? transformString, ParentData parentData, IdAndLabel idAndLabel) {
+  String? transformString,
+  ParentData parentData,
+  IdAndLabel idAndLabel,
+) {
   final localParentData = parentData.cloneForChild(idAndLabel);
   if (transformString != null) {
-    parseTransform(transformString, localParentData);
-    localParentData.lockTransform();
+    localParentData.applyTransformString(transformString);
   }
   return localParentData;
 }
-
-SvgGroup svgGroupFromTransformStringAndChildren(
-  ParentData localParentData, {
-  required IdAndLabel idAndLabel,
-  required List<SvgPart> children,
-}) =>
-    svgGroupFromTransformAndChildren(
-      localParentData,
-      idAndLabel: idAndLabel,
-      children: children,
-    );
 
 class VectorDimensionsAndStyle {
   final Dimension width;
@@ -766,52 +323,18 @@ class VectorDimensionsAndStyle {
     this.autoMirrored,
     this.opacity,
   );
-  void applyViewportTransformTo(ParentData parentData) {
+  void applyViewportTransformTo(LegacyTransformProxy transformContext) {
     const EPSILON = 0.0001;
     if ((viewportX.abs() > EPSILON) || (viewportY.abs() > EPSILON)) {
-      parentData.translateBy(Vector2(viewportX, viewportY));
+      transformContext.translateBy(Vector2(viewportX, viewportY));
     }
     final widthScale = width.value / viewportWidth;
     final heightScale = height.value / viewportHeight;
     if (((widthScale - 1.0).abs() > EPSILON) ||
         ((heightScale - 1.0).abs() > EPSILON)) {
-      parentData.scaleBy(Vector2(widthScale, heightScale));
+      transformContext.scaleBy(Vector2(widthScale, heightScale));
     }
   }
-}
-
-Matrix4 Matrix4_rotation(double radians, Vector2 pivot) {
-  final cosTheta = cos(radians);
-  final sinTheta = sin(radians);
-  final pivotX = pivot.x;
-  final pivotY = pivot.y;
-
-  return Matrix4.columns(
-    Vector4(
-      cosTheta,
-      sinTheta,
-      0,
-      0,
-    ),
-    Vector4(
-      -sinTheta,
-      cosTheta,
-      0,
-      0,
-    ),
-    Vector4(
-      0,
-      0,
-      (1.0 * cosTheta), // a
-      0,
-    ),
-    Vector4(
-      pivotX * (1 - cosTheta) + pivotY * sinTheta,
-      pivotY * (1 - cosTheta) - pivotX * sinTheta,
-      0,
-      1,
-    ),
-  );
 }
 
 Vector vectorFromVectorDimensionsAndStyleAndChildren(
@@ -834,6 +357,7 @@ Vector vectorFromVectorDimensionsAndStyleAndChildren(
       opacity: dimensionsAndStyle.opacity.asStyle,
       children: children,
     );
+
 VectorDimensionsAndStyle vectorDimensionsAndStyleFrom(
   String viewBox,
   double width,
@@ -924,234 +448,3 @@ StyleMap stylesFromStyleString(String styleString) {
   final mapEntries = tuples.map((tpl) => MapEntry(tpl[0], tpl[1]));
   return Map.fromEntries(mapEntries);
 }
-
-final _unitXPathOffset = () {
-  final SvgPathStringSource parser = SvgPathStringSource('M 1 0');
-  return parser.parseSegment().targetPoint;
-}();
-final _unitPathOffset = () {
-  final SvgPathStringSource parser = SvgPathStringSource('M 1 1');
-  return parser.parseSegment().targetPoint;
-}();
-final _unitYPathOffset = () {
-  final SvgPathStringSource parser = SvgPathStringSource('M 0 1');
-  return parser.parseSegment().targetPoint;
-}();
-final _pathOffset =
-    (double dx, double dy) => (_unitXPathOffset * dx) + (_unitYPathOffset * dy);
-
-void _copySegmentInto(PathSegmentData source, PathSegmentData target) => target
-  ..command = source.command
-  ..targetPoint = source.targetPoint
-  ..point1 = source.point1
-  ..point2 = source.point2
-  ..arcSweep = source.arcSweep
-  ..arcLarge = source.arcLarge;
-
-class ParentData {
-  final IdAndLabel current;
-  final ParentData? previous;
-  final StyleMap styles;
-  final AffineMatrix _transform;
-
-  ParentData(this.current, this.previous, this.styles,
-      [AffineMatrix? transform])
-      : _transform = transform?.clone() ?? AffineMatrix.identity();
-  bool _isTransformLocked = false;
-  void lockTransform() => _isTransformLocked = true;
-
-  Iterable<ParentData> get previousParentDatasReversed sync* {
-    var it = previous;
-    while (it != null) {
-      yield it;
-      it = it.previous;
-    }
-  }
-
-  void transformPoint(Vector2 point) {
-    _transform.transformPoint(point);
-  }
-
-  Iterable<ParentData> get previousParentDatas =>
-      previousParentDatasReversed.toList().reversed;
-
-  Iterable<ParentData> get parentDatas =>
-      previousParentDatas.followedBy([this]);
-
-  Iterable<IdAndLabel> get groups => parentDatas.map((e) => e.current);
-
-  ParentData cloneForChild(IdAndLabel newCurrent) =>
-      ParentData(newCurrent, this, {...styles}, _transform);
-  PathSegmentData _multiplySegment(PathSegmentData segment) {
-    final newSegment = PathSegmentData();
-    _copySegmentInto(segment, newSegment);
-    void mulP1() {
-      final point = Vector2(segment.point1.dx, segment.point1.dy);
-      _transform.transformPoint(point);
-      newSegment.point1 = _pathOffset(point.x, point.y);
-    }
-
-    void mulP2() {
-      final point = Vector2(segment.point2.dx, segment.point2.dy);
-      _transform.transformPoint(point);
-      newSegment.point2 = _pathOffset(point.x, point.y);
-    }
-
-    void mulTarget() {
-      final point = Vector2(segment.targetPoint.dx, segment.targetPoint.dy);
-      _transform.transformPoint(point);
-      newSegment.targetPoint = _pathOffset(point.x, point.y);
-    }
-
-    switch (segment.command) {
-      case SvgPathSegType.unknown:
-      case SvgPathSegType.close:
-        return segment;
-      case SvgPathSegType.lineToHorizontalAbs:
-        mulTarget();
-        return newSegment;
-      case SvgPathSegType.lineToVerticalAbs:
-        mulTarget();
-        return newSegment;
-      case SvgPathSegType.moveToAbs:
-      case SvgPathSegType.moveToRel:
-      case SvgPathSegType.lineToAbs:
-      case SvgPathSegType.smoothQuadToAbs:
-        mulTarget();
-        return newSegment;
-      case SvgPathSegType.cubicToAbs:
-        mulP1();
-        mulP2();
-        mulTarget();
-        return newSegment;
-      case SvgPathSegType.quadToAbs:
-        mulP1();
-        mulTarget();
-        return newSegment;
-      case SvgPathSegType.smoothCubicToAbs:
-        mulP2();
-        mulTarget();
-        return newSegment;
-      case SvgPathSegType.arcToAbs:
-        mulP1();
-        mulTarget();
-        return newSegment;
-      case SvgPathSegType.smoothCubicToRel:
-      case SvgPathSegType.arcToRel:
-      case SvgPathSegType.quadToRel:
-      case SvgPathSegType.cubicToRel:
-      case SvgPathSegType.smoothQuadToRel:
-      case SvgPathSegType.lineToRel:
-      case SvgPathSegType.lineToVerticalRel:
-      case SvgPathSegType.lineToHorizontalRel:
-        return segment;
-    }
-  }
-
-  static Never _throwLocked() => throw StateError("Fuck youuuu");
-  void multiplyBy(AffineMatrix mat) {
-    _multiplyBy(mat);
-    _appendTransformString(
-        'matrix(${mat.a} ${mat.b} ${mat.c} ${mat.d} ${mat.e} ${mat.f})');
-  }
-
-  void _multiplyBy(AffineMatrix matrix) {
-    if (_isTransformLocked) {
-      _throwLocked();
-    }
-    _transform.multiply(matrix);
-  }
-
-  void _scaleBy(Vector2 scale) {
-    if (_isTransformLocked) {
-      _throwLocked();
-    }
-    _transform.scale(scale.x, scale.y);
-  }
-
-  void scaleBy(Vector2 scale) {
-    _scaleBy(scale);
-    _appendTransformString('scale(${scale.x} ${scale.y})');
-  }
-
-  void translateBy(Vector2 vector2) {
-    _translateBy(vector2);
-    _appendTransformString('translate(${vector2.x} ${vector2.y})');
-  }
-
-  void _translateBy(Vector2 vector2) {
-    if (_isTransformLocked) {
-      _throwLocked();
-    }
-    _transform.translate(vector2);
-  }
-
-  void rotate(double radians, [Vector2? center]) {
-    _rotate(radians, center);
-    _appendTransformString(
-        'rotate(${radians * radians2Degrees}${center?.x.mapSelfTo((x) => ' $x') ?? ''}${center?.x.mapSelfTo((y) => ' $y') ?? ''})');
-  }
-
-  void _appendTransformString(String s) => _currTransformString.isEmpty
-      ? _currTransformString = s
-      : _currTransformString += ' $s';
-
-  void _rotate(double radians, [Vector2? center]) {
-    if (_isTransformLocked) {
-      _throwLocked();
-    }
-    _transform.rotate(radians, center);
-  }
-
-  String get pathString =>
-      groups.map((e) => '${e.label ?? ''}[${e.id}]').join('>');
-  String _currTransformString = '';
-  String get currTransformString => _currTransformString;
-  String get transformStrings =>
-      parentDatas.map((e) => e.currTransformString).join('>');
-
-  final List<AffineMatrix> _savedTransforms = [];
-  void saveTransform() {
-    _savedTransforms.add(_transform.clone());
-  }
-
-  void restoreTransform() {
-    _transform.setFromOther(_savedTransforms.removeLast());
-  }
-
-  double scaleStrokeWidth(double width) => _transform.scaleStrokeWidth(width);
-
-  void pushPathTransform(String? pathTransformString) {
-    if (pathTransformString != null) {
-      saveTransform();
-      parseTransform(pathTransformString, this);
-    }
-  }
-
-  void popPathTransform(String? pathTransformString) {
-    if (pathTransformString != null) {
-      restoreTransform();
-    }
-  }
-
-  static bool printMatrix = true;
-  PathData multiplyPath(PathData path) {
-    final simplifiedPath =
-        PathData.fromString(path.toSimplifiedPathDataString());
-    final transformedPath = PathData.fromString(
-        segmentsToPathString(simplifiedPath.segments.map(_multiplySegment)));
-    return transformedPath;
-  }
-
-  void extractStylesFromElement(XmlElement element) {
-    const kStyle = 'style';
-    final newStyles =
-        element.getAttribute(kStyle)?.mapSelfTo(stylesFromStyleString);
-    styles.addAll(newStyles ?? const {});
-  }
-}
-
-StyleMap mergeStylesWithParent(StyleMap styles, StyleMap parentStyles) => {
-      ...parentStyles,
-      ...styles,
-    };

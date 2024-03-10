@@ -1,0 +1,17 @@
+name: vector_drawable_annotation
+description: foo
+homepage: https://github.com/kalildev/algebraic_data_types
+version: 0.0.1
+
+environment:
+  sdk: '>=2.16.0 <3.0.0'
+
+dependencies:
+  vector_drawable_core:
+    path: ../../packages/vector_drawable_core
+  vector_drawable_style_extractor:
+    path: ../../packages/vector_drawable_style_extractor
+
+dev_dependencies:
+  lints: ^2.0.0
+  test: ^1.16.0

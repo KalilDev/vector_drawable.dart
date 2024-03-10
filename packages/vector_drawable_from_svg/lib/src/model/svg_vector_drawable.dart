@@ -10,13 +10,16 @@ abstract class SvgNode {
 abstract class SvgPart extends SvgNode {
   IdAndLabel get idAndLabel;
   VectorPart get part;
+  @override
   String get id => idAndLabel.id;
+  @override
   VectorDrawableNode get node => part;
 }
 
 abstract class SvgPathOrGroup extends SvgPart {}
 
 class SvgPath extends SvgPathOrGroup {
+  @override
   final IdAndLabel idAndLabel;
   final Path path;
 
@@ -26,9 +29,10 @@ class SvgPath extends SvgPathOrGroup {
 }
 
 class SvgGroup extends SvgPathOrGroup {
+  @override
   final IdAndLabel idAndLabel;
   final SvgNameMapping labels;
-  final Group group;
+  final AffineGroup group;
 
   SvgGroup(this.idAndLabel, this.labels, this.group);
   @override
@@ -36,6 +40,7 @@ class SvgGroup extends SvgPathOrGroup {
 }
 
 class SvgChildOutlet extends SvgPart {
+  @override
   final IdAndLabel idAndLabel;
   final ChildOutlet childOutlet;
 
@@ -104,19 +109,24 @@ class SvgVectorDrawable {
     XmlDocument document,
     ResourceReference source, {
     DimensionKind dimensionKind = DimensionKind.dp,
+    bool makeViewportVectorSized = true,
   }) =>
       parseSvgIntoVectorDrawable(
         document.rootElement,
         source,
         dimensionKind: dimensionKind,
+        makeViewportVectorSized: makeViewportVectorSized,
       );
+
   static SvgVectorDrawable parseElement(
     XmlElement element, {
     DimensionKind dimensionKind = DimensionKind.dp,
+    bool makeViewportVectorSized = true,
   }) =>
       parseSvgIntoVectorDrawable(
         element,
         null,
         dimensionKind: dimensionKind,
+        makeViewportVectorSized: makeViewportVectorSized,
       );
 }

@@ -57,24 +57,46 @@ class RenderLeafVector extends RenderBox with RenderVectorBaseMixin {
   @override
   bool get needsCompositing => true;
 
+  void paintInsideGroup(PaintingContext context, Offset offset, Group group) {
+    defaultPaintInsideGroup(context, offset, group);
+  }
+
+  void paintInsideAffineGroup(
+      PaintingContext context, Offset offset, AffineGroup group) {
+    defaultPaintInsideAffineGroup(context, offset, group);
+  }
+
   @override
   void paintGroup(PaintingContext context, Offset offset, Group group) {
     final values = _renderingContext.groupValuesFor(group);
     final transform = values.transform;
     //if (group.name == 'g28') print(transform);
     if (transform == null) {
-      defaultPaintInsideGroup(context, offset, group);
+      paintInsideGroup(context, offset, group);
       return;
-    }
-
-    void paintInsideGroup(PaintingContext context, Offset offset) {
-      defaultPaintInsideGroup(context, offset, group);
     }
 
     final canvas = context.canvas;
     canvas.save();
     canvas.transform(transform.storage);
-    paintInsideGroup(context, offset);
+    paintInsideGroup(context, offset, group);
+    canvas.restore();
+  }
+
+  @override
+  void paintAffineGroup(
+      PaintingContext context, Offset offset, AffineGroup affineGroup) {
+    final values = _renderingContext.groupValuesForAffine(affineGroup);
+    final transform = values.transform;
+    if (transform == null) {
+      defaultPaintInsideAffineGroup(context, offset, affineGroup);
+      return;
+    }
+
+    final canvas = context.canvas;
+    canvas.save();
+    canvas.transform(transform.storage);
+    paintInsideAffineGroup(context, offset, affineGroup);
     canvas.restore();
   }
 
@@ -138,4 +160,9 @@ class RenderLeafVector extends RenderBox with RenderVectorBaseMixin {
   void applyInvalidationFlags(int flags) {
     defaultApplyInvalidationFlags(flags);
   }
+
+  @override
+  void paintInsideClipPath(
+          PaintingContext context, ui.Offset offset, ClipPath clipPath) =>
+      defaultPaintInsideClipPath(context, offset, clipPath);
 }

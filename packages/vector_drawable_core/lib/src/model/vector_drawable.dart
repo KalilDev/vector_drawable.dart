@@ -2,9 +2,7 @@
 
 import 'dart:collection';
 
-import 'package:vector_drawable_core/vector_drawable_core.dart';
-
-import 'path.dart';
+import '../visiting/visitor.dart';
 import 'style.dart';
 import '../serializing/vector_drawable.dart';
 import 'package:xml/xml.dart';
@@ -12,6 +10,16 @@ import '../parsing/vector_drawable.dart';
 import 'color.dart';
 import 'diagnostics.dart';
 import 'resource.dart';
+import 'package:vector_drawable_path_utils/model.dart';
+
+enum VectorDrawableNodeType {
+  Vector,
+  Group,
+  ClipPath,
+  Path,
+  ChildOutlet,
+  AffineGroup
+}
 
 enum TintMode { plus, multiply, screen, srcATop, srcIn, srcOver }
 
@@ -90,9 +98,11 @@ final Expando<List<ValueOrProperty<Object>>> _localValuesOrPropertiesExpando =
 // https://developer.android.com/reference/android/graphics/drawable/VectorDrawable
 abstract class VectorDrawableNode implements VectorDiagnosticable {
   final String? name;
-  const VectorDrawableNode({
+  const VectorDrawableNode(
+    this.type, {
     this.name,
   });
+  final VectorDrawableNodeType type;
   Iterable<StyleProperty> get _usedStyles;
   Iterable<StyleProperty> get _localUsedStyles;
   List<ValueOrProperty<Object>> get _localValuesOrProperties;
@@ -108,13 +118,30 @@ abstract class VectorDrawableNode implements VectorDiagnosticable {
 }
 
 abstract class VectorPart extends VectorDrawableNode {
-  const VectorPart({required String? name}) : super(name: name);
+  const VectorPart(VectorDrawableNodeType type, {required String? name})
+      : super(type, name: name);
   @override
   R accept<R, Context>(VectorDrawablePartRawVisitor<R, Context> visitor,
       [Context? context]);
 }
 
-class Vector extends VectorDrawableNode with VectorDiagnosticableTreeMixin {
+abstract class VectorDrawableNodeWithChildren extends VectorDrawableNode {
+  const VectorDrawableNodeWithChildren(VectorDrawableNodeType type,
+      {required String? name})
+      : super(type, name: name);
+
+  List<VectorPart> get children;
+}
+
+abstract class VectorPartWithChildren extends VectorPart
+    implements VectorDrawableNodeWithChildren {
+  const VectorPartWithChildren(VectorDrawableNodeType type,
+      {required String? name})
+      : super(type, name: name);
+}
+
+class Vector extends VectorDrawableNodeWithChildren
+    with VectorDiagnosticableTreeMixin {
   final Dimension width;
   final Dimension height;
   final double viewportWidth;
@@ -123,6 +150,7 @@ class Vector extends VectorDrawableNode with VectorDiagnosticableTreeMixin {
   final TintMode tintMode;
   final bool autoMirrored;
   final StyleOr<double> opacity;
+  @override
   final List<VectorPart> children;
 
   const Vector({
@@ -136,7 +164,7 @@ class Vector extends VectorDrawableNode with VectorDiagnosticableTreeMixin {
     this.autoMirrored = false,
     this.opacity = const Value<double>(1.0),
     required this.children,
-  }) : super(name: name);
+  }) : super(VectorDrawableNodeType.Vector, name: name);
   @override
   List<VectorDiagnosticsNode> diagnosticsChildren() =>
       children.map((e) => e.toDiagnosticsNode()).toList();
@@ -190,15 +218,17 @@ class Vector extends VectorDrawableNode with VectorDiagnosticableTreeMixin {
       visitor.visitVector(this, context);
 }
 
-class ClipPath extends VectorPart with VectorDiagnosticableTreeMixin {
+class ClipPath extends VectorPartWithChildren
+    with VectorDiagnosticableTreeMixin {
   final StyleOr<PathData> pathData;
+  @override
   final List<VectorPart> children;
 
   const ClipPath({
     String? name,
     required this.pathData,
     required this.children,
-  }) : super(name: name);
+  }) : super(VectorDrawableNodeType.ClipPath, name: name);
 
   @override
   Iterable<StyleProperty> get _usedStyles =>
@@ -235,7 +265,91 @@ class ClipPath extends VectorPart with VectorDiagnosticableTreeMixin {
       visitor.visitClipPath(this, context);
 }
 
-class Group extends VectorPart with VectorDiagnosticableTreeMixin {
+class AffineGroup extends VectorPartWithChildren
+    with VectorDiagnosticableTreeMixin {
+  final StyleOr<double> rotation;
+  final StyleOr<double> scaleX;
+  final StyleOr<double> scaleY;
+  final StyleOr<double> translateX;
+  final StyleOr<double> translateY;
+  final StyleOr<TransformOrTransformList> tempTransformList;
+  @override
+  final List<VectorPart> children;
+
+  const AffineGroup({
+    String? name,
+    this.rotation = const Value<double>(0.0),
+    this.scaleX = const Value<double>(1.0),
+    this.scaleY = const Value<double>(1.0),
+    this.translateX = const Value<double>(0.0),
+    this.translateY = const Value<double>(0.0),
+    this.tempTransformList =
+        const Value<TransformOrTransformList>(Transform.none),
+    required this.children,
+  }) : super(VectorDrawableNodeType.AffineGroup, name: name);
+
+  @override
+  List<VectorDiagnosticsNode> diagnosticsChildren() =>
+      children.map((e) => e.toDiagnosticsNode()).toList();
+
+  @override
+  List<VectorProperty<void>> properties() => [
+        VectorNullableProperty('name', name),
+        VectorStyleableProperty<double>.withDefault('rotation', rotation,
+            defaultValue: 0.0),
+        VectorStyleableProperty<double>.withDefault('scaleX', scaleX,
+            defaultValue: 1.0),
+        VectorStyleableProperty<double>.withDefault('scaleY', scaleY,
+            defaultValue: 1.0),
+        VectorStyleableProperty<double>.withDefault('translateX', translateX,
+            defaultValue: 0.0),
+        VectorStyleableProperty<double>.withDefault('translateY', translateY,
+            defaultValue: 0.0),
+      ];
+
+  @override
+  Iterable<StyleProperty> get _usedStyles =>
+      _localUsedStyles.followedBy(children.expand((e) => e._usedStyles));
+  @override
+  Iterable<StyleProperty> get _localUsedStyles => [
+        if (rotation.styled != null) rotation.styled!,
+        if (scaleX.styled != null) scaleX.styled!,
+        if (scaleY.styled != null) scaleY.styled!,
+        if (translateX.styled != null) translateX.styled!,
+        if (translateY.styled != null) translateY.styled!,
+        if (tempTransformList.styled != null) tempTransformList.styled!,
+      ];
+
+  @override
+  List<ValueOrProperty<Object>> get _localValuesOrProperties => [
+        rotation,
+        scaleX,
+        scaleY,
+        translateX,
+        translateY,
+        tempTransformList,
+      ];
+
+  static const List<String> stylablePropertyNames = [
+    'rotation',
+    'scaleX',
+    'scaleY',
+    'translateX',
+    'translateY',
+    'tempTransformList',
+  ];
+
+  @override
+  VectorDiagnosticsNode toDiagnosticsNode([String? name]) =>
+      super.toDiagnosticsNode(this.name);
+
+  @override
+  R accept<R, Context>(VectorDrawablePartRawVisitor<R, Context> visitor,
+          [Context? context]) =>
+      visitor.visitAffineGroup(this, context);
+}
+
+class Group extends VectorPartWithChildren with VectorDiagnosticableTreeMixin {
   final StyleOr<double> rotation;
   final StyleOr<double> pivotX;
   final StyleOr<double> pivotY;
@@ -243,6 +357,7 @@ class Group extends VectorPart with VectorDiagnosticableTreeMixin {
   final StyleOr<double> scaleY;
   final StyleOr<double> translateX;
   final StyleOr<double> translateY;
+  @override
   final List<VectorPart> children;
 
   const Group({
@@ -255,7 +370,7 @@ class Group extends VectorPart with VectorDiagnosticableTreeMixin {
     this.translateX = const Value<double>(0.0),
     this.translateY = const Value<double>(0.0),
     required this.children,
-  }) : super(name: name);
+  }) : super(VectorDrawableNodeType.Group, name: name);
 
   @override
   List<VectorDiagnosticsNode> diagnosticsChildren() =>
@@ -351,7 +466,7 @@ class ChildOutlet extends VectorPart with VectorDiagnosticableMixin {
     required this.y,
     required this.width,
     required this.height,
-  }) : super(name: name);
+  }) : super(VectorDrawableNodeType.ChildOutlet, name: name);
 
   @override
   List<VectorProperty<void>> properties() => [
@@ -430,7 +545,7 @@ class Path extends VectorPart with VectorDiagnosticableMixin {
     this.strokeLineJoin = StrokeLineJoin.miter,
     this.strokeMiterLimit = 4.0,
     this.fillType = FillType.nonZero,
-  }) : super(name: name);
+  }) : super(VectorDrawableNodeType.Path, name: name);
 
   @override
   List<VectorProperty<void>> properties() => [

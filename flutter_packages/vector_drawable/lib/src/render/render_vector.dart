@@ -72,36 +72,46 @@ class RenderVector extends RenderProxyBox with RenderVectorBaseMixin {
   bool get needsCompositing => true;
 
   @override
-  void paintGroup(PaintingContext context, Offset offset, Group group) {
-    final values = _renderingContext.groupValuesFor(group);
+  void paintAffineGroup(
+      PaintingContext context, Offset offset, AffineGroup group) {
+    final values = _renderingContext.groupValuesForAffine(group);
     final transform = values.transform;
-    //if (group.name == 'g28') print(transform);
     if (transform == null) {
-      defaultPaintInsideGroup(context, offset, group);
+      paintInsideAffineGroup(context, offset, group);
       return;
     }
 
-    void paintInsideGroup(PaintingContext context, Offset offset) {
-      defaultPaintInsideGroup(context, offset, group);
-    }
+    void paintInsideAffineGroupForward(
+            PaintingContext context, Offset offset) =>
+        paintInsideAffineGroup(context, offset, group);
 
-    if (usingLayers) {
-      context.pushTransform(
-        needsCompositing,
-        offset,
-        transform,
-        paintInsideGroup,
-      );
-    } else {
-      final canvas = context.canvas;
-      canvas.save();
-      canvas.transform(transform.storage);
-      paintInsideGroup(context, offset);
-      canvas.restore();
-    }
+    context.pushTransform(
+      needsCompositing,
+      offset,
+      transform,
+      paintInsideAffineGroupForward,
+    );
   }
 
-  static const usingLayers = true;
+  @override
+  void paintGroup(PaintingContext context, Offset offset, Group group) {
+    final values = _renderingContext.groupValuesFor(group);
+    final transform = values.transform;
+    if (transform == null) {
+      paintInsideGroup(context, offset, group);
+      return;
+    }
+
+    void paintInsideGroupForward(PaintingContext context, Offset offset) =>
+        paintInsideGroup(context, offset, group);
+
+    context.pushTransform(
+      needsCompositing,
+      offset,
+      transform,
+      paintInsideGroupForward,
+    );
+  }
 
   // According to https://github.com/aosp-mirror/platform_frameworks_base/blob/47fed6ba6ab8a68267a9b3ac6cb9decd4ba122ed/libs/hwui/VectorDrawable.cpp#L264
   // there is no save layer and restore layer.
@@ -114,21 +124,15 @@ class RenderVector extends RenderProxyBox with RenderVectorBaseMixin {
       defaultPaintInsideClipPath(context, offset, clipPath);
     }
 
-    if (usingLayers) {
-      // TODO
-      final Rect bounds = Rect.zero;
-      context.pushClipPath(
-        needsCompositing,
-        offset,
-        bounds,
-        values.pathData,
-        paintInsideClipPath,
-      );
-    } else {
-      // android does not save and restore the canvas
-      context.canvas.clipPath(uiPath);
-      paintInsideClipPath(context, offset);
-    }
+    // TODO
+    final Rect bounds = Rect.zero;
+    context.pushClipPath(
+      needsCompositing,
+      offset,
+      bounds,
+      values.pathData,
+      paintInsideClipPath,
+    );
   }
 
   @override
@@ -255,5 +259,22 @@ class RenderVector extends RenderProxyBox with RenderVectorBaseMixin {
       //child?.markNeedsLayout();
       markNeedsLayout();
     }
+  }
+
+  @override
+  void paintInsideAffineGroup(
+      PaintingContext context, Offset offset, AffineGroup group) {
+    defaultPaintInsideAffineGroup(context, offset, group);
+  }
+
+  @override
+  void paintInsideClipPath(
+      PaintingContext context, Offset offset, ClipPath clipPath) {
+    defaultPaintInsideClipPath(context, offset, clipPath);
+  }
+
+  @override
+  void paintInsideGroup(PaintingContext context, Offset offset, Group group) {
+    defaultPaintInsideGroup(context, offset, group);
   }
 }

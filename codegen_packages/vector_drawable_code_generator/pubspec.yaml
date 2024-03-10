@@ -1,0 +1,28 @@
+name: vector_drawable_code_generator
+description: The generator for algebraic data types.
+version: 0.0.1
+homepage: https://github.com/kalildev/algebraic_data_types
+
+environment:
+  sdk: '>=2.16.0 <3.0.0'
+
+
+dependencies:
+  vector_drawable_annotation:
+    path: ../vector_drawable_annotation
+  source_gen: ^1.2.0
+  build: ^2.3.0
+  build_config: ^1.0.0
+  analyzer: ^5.4.0
+  vector_drawable_from_svg:
+    path: ../../packages/vector_drawable_from_svg
+  vector_drawable_core:
+    path: ../../packages/vector_drawable_core
+  vector_drawable_style_extractor:
+    path: ../../packages/vector_drawable_style_extractor
+  xml: ^5.3.1
+  path:
+  
+
+dev_dependencies:
+  lints: ^2.0.1
